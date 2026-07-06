@@ -1,0 +1,180 @@
+
+MEDREM - AI POWERED MEDICATION REMINDER & HEALTH ASSISTANT
+==========================================================
+
+PROJECT OVERVIEW
+----------------
+MedRem is a secure Android healthcare application designed to help users manage medications,
+receive medication reminders, upload prescriptions and medical reports, track medication
+consistency, and interact with a context-aware AI health assistant.
+
+SDG ALIGNMENT
+-------------
+SDG 3 – Good Health and Well-being
+
+TECH STACK
+----------
+Frontend:
+- Kotlin
+- Jetpack Compose
+- Material Design 3
+- Navigation Compose
+- Hilt
+- Retrofit
+- Coil
+
+Backend:
+- Python
+- FastAPI
+- Uvicorn
+- JWT Authentication
+- bcrypt/passlib
+
+Database:
+- MongoDB Atlas
+
+AI:
+- Gemini 2.5 Flash
+
+Storage:
+- Cloudinary
+
+Notifications:
+- Firebase Cloud Messaging (FCM)
+
+ARCHITECTURE
+------------
+Android App
+    |
+    v
+FastAPI Backend
+    |
+    +---- MongoDB Atlas
+    |
+    +---- Cloudinary
+    |
+    +---- Gemini API
+    |
+    +---- Firebase Cloud Messaging
+
+MAIN SCREENS
+------------
+1. Login
+2. Register (Multi-step Wizard)
+3. Dashboard
+4. Medication List
+5. Add/Edit Medication
+6. Reports Library
+7. Report Details
+8. AI Assistant
+9. Profile
+10. Settings
+
+DATABASE COLLECTIONS
+--------------------
+users
+medications
+reports
+chat_history
+
+API ENDPOINTS
+-------------
+
+AUTH
+POST /api/auth/register
+POST /api/auth/login
+POST /api/auth/logout
+GET  /api/auth/me
+
+USER
+GET    /api/user/profile
+PUT    /api/user/profile
+DELETE /api/user/account
+
+MEDICATIONS
+POST   /api/medications
+GET    /api/medications
+GET    /api/medications/{id}
+PUT    /api/medications/{id}
+DELETE /api/medications/{id}
+
+REPORTS
+POST   /api/reports/upload
+GET    /api/reports
+GET    /api/reports/{id}
+DELETE /api/reports/{id}
+
+AI
+POST /api/ai/chat
+POST /api/ai/summarize-report
+POST /api/ai/extract-medicines
+
+DASHBOARD
+GET /api/dashboard/stats
+GET /api/dashboard/consistency
+GET /api/dashboard/recent-reports
+
+REMINDERS
+POST /api/reminders/taken
+POST /api/reminders/skipped
+POST /api/reminders/remind-later
+
+WORKFLOWS
+---------
+
+Prescription Upload:
+Upload -> Cloudinary -> Gemini -> Summary -> MongoDB
+
+Medicine Extraction:
+Upload -> Gemini -> Detect Medicines -> Approve/Edit -> Save Medication
+
+Chatbot:
+Question -> JWT Verify -> Fetch Profile + Medications + Summaries
+-> Gemini -> Response
+
+Reminder:
+Medication -> Schedule -> FCM Notification
+-> Taken / Skip / Remind Later
+
+SECURITY
+--------
+- JWT Authentication
+- bcrypt Password Hashing
+- HTTPS
+- User-level Authorization
+- Input Validation
+- Secure Cloud Storage
+
+AI RULES
+--------
+- Inform, summarize and assist
+- Never diagnose
+- Never prescribe medication
+- Never recommend stopping medication
+- Never replace healthcare professionals
+- Calm, safe and supportive tone
+
+MVP PRIORITIES
+--------------
+Phase 1:
+- Authentication
+- Profile
+- Medication Management
+- Dashboard
+- Notifications
+
+Phase 2:
+- Report Upload
+- AI Summarization
+- Prescription Extraction
+
+Phase 3:
+- AI Chatbot
+- Health Insights
+
+Future Scope:
+- Doctor Portal
+- Caregiver Portal
+- Smartwatch Integration
+- Drug Interaction Detection
+- Offline Support
