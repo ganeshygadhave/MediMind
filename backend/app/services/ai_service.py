@@ -5,7 +5,6 @@ Gemini 2.5 Flash integration for chat, report summarization, and medicine extrac
 
 import json
 import os
-import google.generativeai as genai
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage
 from fastapi import HTTPException, status
@@ -65,16 +64,6 @@ OUTPUT RULES:
 3. Return ONLY the JSON array. No conversational text.
 4. If a value is unknown, use "Not specified"."""
 
-
-def _init_gemini():
-    """Initialize Gemini with API key."""
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-
-
-def _get_model():
-    """Get the Gemini model instance."""
-    _init_gemini()
-    return genai.GenerativeModel("gemini-2.0-flash")
 
 
 async def _build_user_context(user: dict, user_id: str) -> str:
