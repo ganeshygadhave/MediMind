@@ -23,8 +23,8 @@ def _init_firebase():
         import firebase_admin
         from firebase_admin import credentials
 
-        # Priority 1: Load from FIREBASE_CREDENTIALS_JSON env var (for cloud deploy on Render)
-        cred_json_str = os.environ.get("FIREBASE_CREDENTIALS_JSON", "")
+        # Priority 1: Load from FIREBASE_SERVICE_ACCOUNT env var (for cloud deploy on Render)
+        cred_json_str = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "")
         if cred_json_str:
             cred_dict = json.loads(cred_json_str)
             cred = credentials.Certificate(cred_dict)
