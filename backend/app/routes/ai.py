@@ -78,7 +78,7 @@ async def extract_medicines(
     report = await report_service.get_report(request.report_id, user_id)
 
     # Extract medicines
-    medicines = await ai_service.extract_medicines(report["file_url"])
+    medicines = await ai_service.extract_medicines(report["file_url"], user_id)
 
     # Update report with extracted data
     await report_repository.update_report(

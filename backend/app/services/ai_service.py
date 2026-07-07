@@ -101,60 +101,55 @@ async def _build_user_context(user: dict, user_id: str) -> str:
             )
 
     # Recent report summaries
-    reports = await report_repository.find_recent_reports(user_id, limit=3)
+    reports = await report_repository.find_recent_reports(user_id, limit=5)
     if reports:
-        context_parts.append("\nRecent Reports:")
+        context_parts.append("\nRecent Medical Reports:")
         for report in reports:
-            context_parts.append(f"  - {report.get('title', 'Untitled')}")
-
+            title = report.get('title', 'Untitled')
+            context_parts.append(f"  - Title: {title}")
+            
+            # Add AI Summary if available
+            if report.get('ai_summary'):
+                context_parts.append(f"    Summary: {report['ai_summary']}")
+                
+            # Add Extracted Data if available (e.g. medicines)
+            extracted_data = report.get('extracted_data', {})
+            if extracted_data and 'medicines' in extracted_data:
+                meds_str = ", ".join([med.get('name', 'Unknown') for med in extracted_data['medicines']])
+                context_parts.append(f"    Extracted Medicines: {meds_str}")
+                
     return "\n".join(context_parts)
 
 
 async def chat(user: dict, user_id: str, message: str) -> dict:
     """
-    Process a chat message with the AI assistant.
-    Injects user context and chat history into the prompt.
+    Process a chat message with the agentic AI health assistant.
+    The agent autonomously decides which tools to call (meds, profile, reports).
     """
     try:
-        model = _get_model()
-
-        # Build context
-        user_context = await _build_user_context(user, user_id)
-
-        # Get recent chat history
-        recent_messages = await chat_repository.get_recent_messages(user_id, limit=10)
-        history_text = ""
-        for msg in recent_messages:
-            role = "User" if msg["role"] == "user" else "Assistant"
-            history_text += f"{role}: {msg['content']}\n"
-
-        # Build the full prompt
-        full_prompt = f"""{SYSTEM_PROMPT}
-
---- PATIENT CONTEXT ---
-{user_context}
-
---- CONVERSATION HISTORY ---
-{history_text}
-
---- CURRENT MESSAGE ---
-User: {message}
-
-Please respond helpfully and safely:"""
-
-        # Generate response
-        response = model.generate_content(full_prompt)
-        assistant_message = response.text
-
-        # Save user message
+        from app.services.health_agent import run_health_agent
+        
+        # 1. Run the agentic loop
+        agent_response = await run_health_agent(user_id, message)
+        answer = agent_response.get("answer", "")
+        
+        # 2. Save user message to history
         user_msg_doc = create_chat_message_document(
             user_id=user_id, role="user", content=message
         )
         await chat_repository.save_message(user_msg_doc)
 
-        # Save assistant response
+        # 3. Save assistant response to history
+        metadata = {
+            "warning_level": agent_response.get("warning_level"),
+            "sources_used": agent_response.get("sources_used"),
+            "suggested_actions": agent_response.get("suggested_actions")
+        }
         assistant_msg_doc = create_chat_message_document(
-            user_id=user_id, role="assistant", content=assistant_message
+            user_id=user_id, 
+            role="assistant", 
+            content=answer,
+            metadata=metadata
         )
         await chat_repository.save_message(assistant_msg_doc)
 
@@ -163,7 +158,7 @@ Please respond helpfully and safely:"""
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"AI service error: {str(e)}"
+            detail=f"AI agent error: {str(e)}"
         )
 
 
@@ -197,49 +192,22 @@ Please analyze and summarize this medical report:"""
         )
 
 
-async def extract_medicines(report_url: str) -> list[dict]:
+async def extract_medicines(report_url: str, user_id: str) -> list[dict]:
     """
-    Extract medicine information from a prescription image.
-
-    Args:
-        report_url: Cloudinary URL of the prescription
-
-    Returns:
-        List of extracted medicines with name, dosage, frequency, instructions
+    Extract medicine information from a prescription image using a LangGraph Agent.
+    The agent cross-references with user history for duplicates and interaction warnings.
     """
     try:
-        model = _get_model()
-
-        prompt = f"""{MEDICINE_EXTRACTION_PROMPT}
-
-Prescription URL: {report_url}
-
-Extract all medications and return as JSON array:"""
-
-        response = model.generate_content(prompt)
-        response_text = response.text
-
-        # Try to parse JSON from the response
-        try:
-            # Strip markdown code block if present
-            clean_text = response_text.strip()
-            if clean_text.startswith("```json"):
-                clean_text = clean_text[7:]
-            if clean_text.startswith("```"):
-                clean_text = clean_text[3:]
-            if clean_text.endswith("```"):
-                clean_text = clean_text[:-3]
-
-            medicines = json.loads(clean_text.strip())
-            if isinstance(medicines, list):
-                return medicines
-            return []
-        except json.JSONDecodeError:
-            # Return raw text as single item if JSON parsing fails
-            return [{"raw_response": response_text}]
+        from app.services.health_agent import run_extraction_agent
+        
+        # Run the agentic extraction loop
+        result = await run_extraction_agent(user_id, report_url)
+        
+        # Return the list of medicines (the route expects a list[dict])
+        return result.get("medicines", [])
 
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Medicine extraction failed: {str(e)}"
+            detail=f"Medicine extraction agent failed: {str(e)}"
         )
