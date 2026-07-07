@@ -43,13 +43,15 @@ async def upload_file(file: UploadFile, folder: str = "medrem/reports") -> dict:
     else:
         resource_type = "raw"
 
-    # Upload to Cloudinary
+    # Upload to Cloudinary with explicit public access
     result = cloudinary.uploader.upload(
         contents,
         folder=folder,
         resource_type=resource_type,
         use_filename=True,
         unique_filename=True,
+        access_mode="public",  # Force public access
+        type="upload"          # Standard public upload type
     )
 
     return {

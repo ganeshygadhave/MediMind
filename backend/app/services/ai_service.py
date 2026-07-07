@@ -4,7 +4,10 @@ Gemini 2.5 Flash integration for chat, report summarization, and medicine extrac
 """
 
 import json
+import os
 import google.generativeai as genai
+from langchain_groq import ChatGroq
+from langchain_core.messages import HumanMessage
 from fastapi import HTTPException, status
 
 from app.config import settings
@@ -47,17 +50,20 @@ Include:
 Keep the language simple and accessible. Do NOT diagnose or recommend treatment.
 If you cannot read or understand the report, say so clearly."""
 
-MEDICINE_EXTRACTION_PROMPT = """Extract all medication information from this prescription image.
+MEDICINE_EXTRACTION_PROMPT = """You are a medical data extraction expert. 
+Your task is to scan the entire prescription image and extract EVERY SINGLE medication mentioned. 
 
-For each medication found, provide:
-- **name**: Medicine name
+For EACH medication found, provide:
+- **name**: Exact medicine name
 - **dosage**: Dosage amount (e.g., "500mg", "10mg")
-- **frequency**: How often to take it (e.g., "Once Daily", "Twice Daily", "Three Times Daily")
-- **instructions**: Any special instructions (e.g., "Take with food", "Before bedtime")
+- **frequency**: How often to take it (e.g., "Once Daily", "Twice Daily")
+- **instructions**: Special instructions (e.g., "Take with food")
 
-Return the result as a JSON array of objects with keys: name, dosage, frequency, instructions.
-If you cannot read the prescription clearly, indicate which parts are unclear.
-Do NOT guess or infer medications that aren't clearly written."""
+OUTPUT RULES:
+1. You MUST return a JSON array of objects.
+2. If there are 10 medicines, return all 10. Do NOT stop after the first one.
+3. Return ONLY the JSON array. No conversational text.
+4. If a value is unknown, use "Not specified"."""
 
 
 def _init_gemini():
@@ -68,7 +74,7 @@ def _init_gemini():
 def _get_model():
     """Get the Gemini model instance."""
     _init_gemini()
-    return genai.GenerativeModel("gemini-2.5-flash")
+    return genai.GenerativeModel("gemini-2.0-flash")
 
 
 async def _build_user_context(user: dict, user_id: str) -> str:
@@ -153,13 +159,28 @@ async def chat(user: dict, user_id: str, message: str) -> dict:
         )
         await chat_repository.save_message(assistant_msg_doc)
 
-        return serialize_doc(assistant_msg_doc)
+        # 4. Return flattened response to match Android DTO
+        return {
+            "role": "assistant",
+            "answer": answer,
+            "warning_level": agent_response.get("warning_level", "none"),
+            "sources_used": agent_response.get("sources_used", []),
+            "suggested_actions": agent_response.get("suggested_actions", []),
+            "timestamp": assistant_msg_doc["timestamp"].isoformat()
+        }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"AI agent error: {str(e)}"
-        )
+        print(f"DEBUG: Chat Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Return structured error to avoid Android app crash
+        return {
+            "role": "assistant",
+            "answer": f"Sorry, I encountered an error: {str(e)}",
+            "warning_level": "medium",
+            "sources_used": [],
+            "suggested_actions": ["Check API Key", "Retry later"]
+        }
 
 
 async def summarize_report(report_url: str, user_id: str) -> str:
@@ -174,40 +195,111 @@ async def summarize_report(report_url: str, user_id: str) -> str:
         AI-generated summary string
     """
     try:
-        model = _get_model()
+        import httpx
+        import base64
+        import io
+        from pypdf import PdfReader
 
-        prompt = f"""{REPORT_SUMMARY_PROMPT}
+        # 1. Download the file
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(report_url)
+            if resp.status_code != 200:
+                print(f"DEBUG: Download failed for {report_url} with status {resp.status_code}")
+                return "Unauthorized: Please ensure your Cloudinary reports folder is set to 'Public' (not 'Private')."
+            file_bytes = resp.content
+            content_type = resp.headers.get("Content-Type", "")
 
-Report URL: {report_url}
+        # 2. Case A: It's a PDF -> Extract text and summarize
+        if "pdf" in content_type.lower() or report_url.lower().endswith(".pdf"):
+            pdf_file = io.BytesIO(file_bytes)
+            reader = PdfReader(pdf_file)
+            extracted_text = ""
+            for page in reader.pages:
+                extracted_text += page.extract_text() + "\n"
+            
+            if len(extracted_text.strip()) < 10:
+                return "The PDF seems to be an image/scan. Please upload a JPEG or PNG of the report instead."
 
-Please analyze and summarize this medical report:"""
+            if settings.GROQ_API_KEY:
+                groq_llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=settings.GROQ_API_KEY)
+                prompt = f"{REPORT_SUMMARY_PROMPT}\n\nPDF TEXT:\n{extracted_text}"
+                response = await groq_llm.ainvoke([HumanMessage(content=prompt)])
+                return response.content
+            return "Groq key missing."
 
-        response = model.generate_content(prompt)
-        return response.text
+        # 3. Case B: It's an Image -> Use Vision
+        if settings.GROQ_API_KEY:
+            image_b64 = base64.b64encode(file_bytes).decode("utf-8")
+            groq_llm = ChatGroq(model="meta-llama/llama-4-scout-17b-16e-instruct", groq_api_key=settings.GROQ_API_KEY)
+            message = HumanMessage(content=[
+                {"type": "text", "text": f"{REPORT_SUMMARY_PROMPT}\nAnalyze this report."},
+                {"type": "image_url", "image_url": {"url": f"data:{content_type};base64,{image_b64}"}}
+            ])
+            response = await groq_llm.ainvoke([message])
+            return response.content
+        
+        return "Groq API Key is missing."
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Report summarization failed: {str(e)}"
-        )
+        print(f"DEBUG: Summarization Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return f"Summarization failed: {str(e)}"
 
 
 async def extract_medicines(report_url: str, user_id: str) -> list[dict]:
     """
-    Extract medicine information from a prescription image using a LangGraph Agent.
-    The agent cross-references with user history for duplicates and interaction warnings.
+    Extract medicine information from a prescription image or PDF using Groq.
     """
     try:
-        from app.services.health_agent import run_extraction_agent
+        import httpx
+        import base64
+        import io
+        from pypdf import PdfReader
+
+        if settings.GROQ_API_KEY:
+            # 1. Download file
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(report_url)
+                if resp.status_code != 200:
+                    return []
+                file_bytes = resp.content
+                content_type = resp.headers.get("Content-Type", "")
+
+            # 2. Case A: PDF Extraction
+            if "pdf" in content_type.lower() or report_url.lower().endswith(".pdf"):
+                pdf_file = io.BytesIO(file_bytes)
+                reader = PdfReader(pdf_file)
+                extracted_text = ""
+                for page in reader.pages:
+                    extracted_text += page.extract_text() + "\n"
+                
+                groq_llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=settings.GROQ_API_KEY)
+                prompt = f"{MEDICINE_EXTRACTION_PROMPT}\n\nPDF TEXT CONTENT:\n{extracted_text}"
+                response = await groq_llm.ainvoke([HumanMessage(content=prompt)])
+            
+            # 3. Case B: Image Extraction
+            else:
+                image_b64 = base64.b64encode(file_bytes).decode("utf-8")
+                groq_llm = ChatGroq(model="meta-llama/llama-4-scout-17b-16e-instruct", groq_api_key=settings.GROQ_API_KEY)
+                message = HumanMessage(content=[
+                    {"type": "text", "text": f"{MEDICINE_EXTRACTION_PROMPT}\nExtract medications from this document."},
+                    {"type": "image_url", "image_url": {"url": f"data:{content_type};base64,{image_b64}"}}
+                ])
+                response = await groq_llm.ainvoke([message])
+
+            # Parse the JSON from Groq's response
+            try:
+                content = response.content
+                if "[" in content and "]" in content:
+                    json_str = content[content.find("["):content.rfind("]")+1]
+                    return json.loads(json_str)
+                return []
+            except:
+                return []
         
-        # Run the agentic extraction loop
-        result = await run_extraction_agent(user_id, report_url)
-        
-        # Return the list of medicines (the route expects a list[dict])
-        return result.get("medicines", [])
+        return []
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Medicine extraction agent failed: {str(e)}"
-        )
+        print(f"DEBUG: Extraction Error: {str(e)}")
+        return []

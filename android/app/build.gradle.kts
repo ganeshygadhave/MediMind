@@ -2,7 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.dagger.hilt.android")
-//    id("com.google.gms.google-services")
+    id("com.google.gms.google-services")
     id("org.jetbrains.kotlin.plugin.compose")
     kotlin("kapt")
 }
@@ -85,8 +85,8 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // Firebase
-//    implementation(platform("com.google.firebase:firebase-bom:33.8.0"))
-//    implementation("com.google.firebase:firebase-messaging-ktx")
+    implementation(platform("com.google.firebase:firebase-bom:33.8.0"))
+    implementation("com.google.firebase:firebase-messaging-ktx")
 
     // Accompanist (System UI Controller)
     implementation("com.google.accompanist:accompanist-systemuicontroller:0.34.0")
@@ -99,6 +99,9 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    // Markdown Rendering
+    implementation("com.github.jeziellago:compose-markdown:0.5.0")
 }
 
 kapt {

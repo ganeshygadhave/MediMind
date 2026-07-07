@@ -1,32 +1,34 @@
 package com.medrem.app.data.remote
 
-// import com.google.firebase.messaging.FirebaseMessagingService
-// import com.google.firebase.messaging.RemoteMessage
+import com.google.firebase.messaging.FirebaseMessagingService
+import com.google.firebase.messaging.RemoteMessage
+import com.medrem.app.util.NotificationHelper
+import android.util.Log
 
 /**
  * Firebase Cloud Messaging service for receiving push notifications.
- * Currently disabled because Firebase dependencies are not yet configured.
  */
-class MedRemFirebaseMessagingService /* : FirebaseMessagingService() */ {
+class MedRemFirebaseMessagingService : FirebaseMessagingService() {
 
-    /*
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        // TODO: Send the new FCM token to the backend
+        Log.d("FCM", "New token generated: $token")
+        // Token will be sent to backend during Login/Register flow 
+        // or stored in TokenManager for the next app start.
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
+        Log.d("FCM", "Message received: ${message.data}")
 
-        // Handle medication reminder notifications
-        val notificationType = message.data["type"]
-        when (notificationType) {
-            "medication_reminder" -> {
-                val medicationId = message.data["medication_id"]
-                val scheduledTime = message.data["scheduled_time"]
-                // TODO: Show notification
-            }
-        }
+        val title = message.notification?.title ?: message.data["title"] ?: "Medication Reminder"
+        val body = message.notification?.body ?: message.data["body"] ?: "It's time to take your medicine."
+        
+        NotificationHelper.showNotification(
+            context = applicationContext,
+            title = title,
+            message = body,
+            data = message.data
+        )
     }
-    */
 }

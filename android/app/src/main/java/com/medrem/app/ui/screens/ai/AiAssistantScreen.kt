@@ -1,7 +1,14 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, 
+          androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.medrem.app.ui.screens.ai
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -21,11 +28,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.medrem.app.data.remote.dto.ChatMessageDto
 import com.medrem.app.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiAssistantScreen(
     onNavigateBack: () -> Unit,
@@ -33,6 +40,13 @@ fun AiAssistantScreen(
 ) {
     val uiState = viewModel.uiState
     val listState = rememberLazyListState()
+    val context = LocalContext.current
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let { viewModel.onFileSelected(context, it) }
+    }
 
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) listState.animateScrollToItem(uiState.messages.size - 1)
@@ -68,7 +82,10 @@ fun AiAssistantScreen(
                 contentPadding = PaddingValues(vertical = 16.dp),
             ) {
                 items(uiState.messages) { message ->
-                    ChatBubble(message)
+                    ChatBubble(
+                        message = message,
+                        onActionClick = { viewModel.sendQuickAction(it) }
+                    )
                 }
                 if (uiState.isLoading) {
                     item {
@@ -101,11 +118,31 @@ fun AiAssistantScreen(
 
             // Input Bar
             Surface(color = MaterialTheme.colorScheme.surfaceContainerLowest, tonalElevation = 2.dp) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = {}) { Icon(Icons.Outlined.AttachFile, "Attach", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Column {
+                    AnimatedVisibility(visible = uiState.selectedFile != null) {
+                        Row(
+                            Modifier.fillMaxWidth().background(PrimaryTeal.copy(alpha = 0.1f)).padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.AttachFile, null, tint = PrimaryTeal, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                uiState.selectedFile?.name ?: "",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = viewModel::clearSelectedFile, modifier = Modifier.size(24.dp)) {
+                                Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = { launcher.launch("*/*") }) { 
+                            Icon(Icons.Outlined.AttachFile, "Attach", tint = if (uiState.selectedFile != null) PrimaryTeal else MaterialTheme.colorScheme.onSurfaceVariant) 
+                        }
                     OutlinedTextField(
                         value = uiState.inputText,
                         onValueChange = viewModel::onInputChange,
@@ -130,12 +167,23 @@ fun AiAssistantScreen(
         }
     }
 }
+}
 
 @Composable
-fun ChatBubble(message: ChatMessageDto) {
+fun ChatBubble(
+    message: ChatMessageDto,
+    onActionClick: (String) -> Unit = {}
+) {
     val isUser = message.role == "user"
+    val warningColor = when (message.warningLevel?.lowercase()) {
+        "low" -> Color(0xFF2196F3)    // Blue
+        "medium" -> Color(0xFFFFC107) // Yellow/Amber
+        "high" -> Color(0xFFF44336)   // Red
+        else -> null                  // None or null
+    }
+
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
     ) {
         if (!isUser) {
@@ -144,21 +192,71 @@ fun ChatBubble(message: ChatMessageDto) {
             }
             Spacer(Modifier.width(8.dp))
         }
-        Surface(
-            shape = RoundedCornerShape(
-                topStart = 16.dp, topEnd = 16.dp,
-                bottomStart = if (isUser) 16.dp else 4.dp,
-                bottomEnd = if (isUser) 4.dp else 16.dp,
-            ),
-            color = if (isUser) PrimaryTeal else MaterialTheme.colorScheme.surfaceContainerHigh,
-            modifier = Modifier.widthIn(max = 280.dp),
-        ) {
-            Text(
-                text = message.content,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(12.dp),
-            )
+        
+        Column(horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
+            Surface(
+                shape = RoundedCornerShape(
+                    topStart = 16.dp, topEnd = 16.dp,
+                    bottomStart = if (isUser) 16.dp else 4.dp,
+                    bottomEnd = if (isUser) 4.dp else 16.dp,
+                ),
+                color = if (isUser) PrimaryTeal else MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.widthIn(max = 300.dp),
+                border = if (warningColor != null) BorderStroke(1.dp, warningColor) else null
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    if (warningColor != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                            Icon(Icons.Default.Warning, null, tint = warningColor, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "${message.warningLevel?.uppercase()} WARNING",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = warningColor
+                            )
+                        }
+                    }
+                    
+                    dev.jeziellago.compose.markdowntext.MarkdownText(
+                        markdown = message.content,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface
+                    )
+                    
+                    if (message.sourcesUsed.isNotEmpty() && !isUser) {
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                        Text(
+                            text = "Sources: ${message.sourcesUsed.joinToString(", ")}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+
+            if (message.suggestedActions.isNotEmpty() && !isUser) {
+                Spacer(Modifier.height(8.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.widthIn(max = 300.dp)
+                ) {
+                    message.suggestedActions.forEach { action ->
+                        AssistChip(
+                            onClick = { onActionClick(action) },
+                            label = { Text(action, fontSize = 13.sp, fontWeight = FontWeight.Medium) },
+                            shape = RoundedCornerShape(20.dp),
+                            border = null, // Remove the thin outline
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = PrimaryTeal.copy(alpha = 0.08f),
+                                labelColor = PrimaryDark
+                            ),
+                            modifier = Modifier.height(36.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }

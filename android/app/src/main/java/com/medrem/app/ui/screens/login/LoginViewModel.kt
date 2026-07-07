@@ -8,6 +8,9 @@ import androidx.lifecycle.viewModelScope
 import com.medrem.app.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import com.google.firebase.messaging.FirebaseMessaging
+import com.medrem.app.data.local.TokenManager
+import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
 data class LoginUiState(
@@ -21,6 +24,7 @@ data class LoginUiState(
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    private val tokenManager: TokenManager,
 ) : ViewModel() {
 
     var uiState by mutableStateOf(LoginUiState())
@@ -42,7 +46,17 @@ class LoginViewModel @Inject constructor(
 
         viewModelScope.launch {
             uiState = uiState.copy(isLoading = true, error = null)
-            val result = authRepository.login(uiState.email.trim(), uiState.password)
+
+            // Capture FCM token
+            var fcmToken: String? = null
+            try {
+                fcmToken = FirebaseMessaging.getInstance().token.await()
+                fcmToken?.let { tokenManager.saveFCMToken(it) }
+            } catch (e: Exception) {
+                // If FCM fails, login still proceeds
+            }
+
+            val result = authRepository.login(uiState.email.trim(), uiState.password, fcmToken)
             result.fold(
                 onSuccess = {
                     uiState = uiState.copy(isLoading = false, isSuccess = true)

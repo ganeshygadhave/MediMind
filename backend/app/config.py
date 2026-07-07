@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # Google Gemini AI
     GEMINI_API_KEY: str = ""
 
+    # Groq AI (Backup/Chat Fast Tier)
+    GROQ_API_KEY: str = ""
+
     # Firebase
     FIREBASE_CREDENTIALS_PATH: str = "./firebase-service-account.json"
 

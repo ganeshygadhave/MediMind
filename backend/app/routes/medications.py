@@ -57,6 +57,16 @@ async def update_medication(
     return await medication_service.update_medication(medication_id, user_id, update_data)
 
 
+@router.post("/{medication_id}/trigger-reminder")
+async def trigger_medication_reminder(
+    medication_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Manually trigger a push notification reminder (for testing)."""
+    user_id = str(current_user["_id"])
+    return await medication_service.trigger_test_reminder(medication_id, user_id, current_user)
+
+
 @router.delete("/{medication_id}", response_model=MessageResponse)
 async def delete_medication(
     medication_id: str,

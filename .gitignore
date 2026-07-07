@@ -94,3 +94,10 @@ captures/
 # External native build folder generated in Android Studio
 .externalNativeBuild/
 .cxx/
+*.json
+!backend/package.json
+!firebase.json
+firebase-service-account.json
+google-services.json
+backend/firebase-service-account.json
+android/app/google-services.json

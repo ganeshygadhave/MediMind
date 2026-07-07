@@ -7,6 +7,7 @@ import com.google.gson.annotations.SerializedName
 data class LoginRequestDto(
     val email: String,
     val password: String,
+    @SerializedName("fcm_token") val fcmToken: String? = null,
 )
 
 data class RegisterRequestDto(
@@ -115,7 +116,17 @@ data class ReportSummaryResponseDto(
 
 data class ExtractMedicinesResponseDto(
     @SerializedName("report_id") val reportId: String,
-    val medicines: List<Map<String, String>>,
+    val medicines: List<ExtractedMedicineDto>,
+    val summary: String? = null,
+)
+
+data class ExtractedMedicineDto(
+    val name: String,
+    val dosage: String,
+    val frequency: String,
+    val instructions: String? = null,
+    @SerializedName("is_duplicate") val isDuplicate: Boolean = false,
+    @SerializedName("interaction_warning") val interactionWarning: String? = null,
 )
 
 // ── Chat DTOs ───────────────────────────────────────────
@@ -126,8 +137,11 @@ data class ChatRequestDto(
 
 data class ChatMessageDto(
     val role: String,
-    val content: String,
-    val timestamp: String,
+    @SerializedName("answer") val content: String,
+    @SerializedName("warning_level") val warningLevel: String? = "none",
+    @SerializedName("sources_used") val sourcesUsed: List<String> = emptyList(),
+    @SerializedName("suggested_actions") val suggestedActions: List<String> = emptyList(),
+    val timestamp: String? = null,
 )
 
 // ── Dashboard DTOs ──────────────────────────────────────

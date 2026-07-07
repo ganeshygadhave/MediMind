@@ -47,4 +47,15 @@ object FileUtils {
         }
         return result
     }
+    fun createImageUri(context: Context): Uri {
+        val fileName = "camera_capture_${System.currentTimeMillis()}.jpg"
+        // Must use externalCacheDir — internal cacheDir is not accessible by the camera app
+        val storageDir = context.externalCacheDir ?: context.cacheDir
+        val file = File(storageDir, fileName)
+        return androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.provider",
+            file
+        )
+    }
 }

@@ -60,10 +60,15 @@ val bottomNavItems = listOf(
  * Main navigation host composable.
  */
 @Composable
-fun MedRemNavHost() {
+fun MedRemNavHost(tokenManager: TokenManager) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+
+    // Check persisted token to decide the start destination
+    val startDestination = remember {
+        if (tokenManager.isLoggedIn()) Screen.Dashboard.route else Screen.Login.route
+    }
 
     // Determine if bottom bar should be shown
     val showBottomBar = currentDestination?.route in bottomNavItems.map { it.route }
@@ -110,7 +115,7 @@ fun MedRemNavHost() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Login.route,
+            startDestination = startDestination,
             modifier = Modifier.padding(innerPadding),
             enterTransition = {
                 slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(300))
@@ -153,6 +158,9 @@ fun MedRemNavHost() {
                 DashboardScreen(
                     onNavigateToAiAssistant = {
                         navController.navigate(Screen.AiAssistant.route)
+                    },
+                    onNavigateToMedications = {
+                        navController.navigate(Screen.Medications.route)
                     }
                 )
             }

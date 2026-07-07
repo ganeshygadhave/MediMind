@@ -46,11 +46,11 @@ async def get_dashboard_stats(user_id: str) -> dict:
     # Average taken time
     avg_time = _calculate_avg_taken_time(taken_logs)
 
-    # Alerts sent today
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Alerts sent in the last 24 hours (more reliable across timezones)
+    yesterday = now - timedelta(hours=24)
     today_alerts = await dose_logs.count_documents({
         "user_id": user_id,
-        "timestamp": {"$gte": today_start},
+        "timestamp": {"$gte": yesterday},
         "action": {"$in": ["reminder_sent"]}
     })
 
@@ -173,8 +173,10 @@ async def log_dose_action(
         "timestamp": datetime.now(timezone.utc),
     }
 
+    print(f"DEBUG: Logging action '{action}' for user {user_id}")
     result = await dose_logs.insert_one(log_doc)
     log_doc["_id"] = str(result.inserted_id)
+    print(f"DEBUG: Successfully logged action with ID: {log_doc['_id']}")
     return serialize_doc(log_doc)
 
 

@@ -59,7 +59,7 @@ async def find_recent_reports(user_id: str, limit: int = 3) -> list[dict]:
     collection = get_reports_collection()
     cursor = collection.find(
         {"user_id": user_id},
-        {"_id": 1, "title": 1, "report_type": 1, "created_at": 1}
+        {"_id": 1, "title": 1, "report_type": 1, "ai_summary": 1, "extracted_data": 1, "created_at": 1}
     ).sort("created_at", -1).limit(limit)
     return await cursor.to_list(length=limit)
 

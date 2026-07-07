@@ -13,9 +13,9 @@ class AuthRepositoryImpl @Inject constructor(
     private val tokenManager: TokenManager,
 ) : AuthRepository {
 
-    override suspend fun login(email: String, password: String): Result<AuthResponseDto> {
+    override suspend fun login(email: String, password: String, fcmToken: String?): Result<AuthResponseDto> {
         return try {
-            val response = api.login(LoginRequestDto(email, password))
+            val response = api.login(LoginRequestDto(email, password, fcmToken))
             if (response.isSuccessful) {
                 val body = response.body()!!
                 tokenManager.saveToken(body.accessToken)

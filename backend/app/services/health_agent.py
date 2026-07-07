@@ -5,13 +5,14 @@ Agentic AI system for personalized health Q&A using LangGraph and Gemini.
 
 import json
 import os
-from typing import Annotated, List, Literal, TypedDict, Union
+from typing import Annotated, List, Literal, Optional, TypedDict, Union
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
+from langchain_groq import ChatGroq
 from pydantic import BaseModel, Field
 
 from app.config import settings
@@ -39,7 +40,7 @@ class ExtractedMedicine(BaseModel):
     frequency: str
     instructions: str
     is_duplicate: bool = Field(description="True if the user is already taking this exact medicine.")
-    interaction_warning: Optional[str] = Field(description="Warning if this medicine interacts with existing ones or allergies.")
+    interaction_warning: Optional[str] = Field(default=None, description="Warning if this medicine interacts with existing ones or allergies.")
 
 class ExtractionResponse(BaseModel):
     """The structured result of a medication extraction process."""
@@ -110,12 +111,25 @@ tool_node = ToolNode(tools)
 
 # ── 4. Define Nodes ────────────────────────────────────────
 
-# Initialize the model
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    google_api_key=settings.GEMINI_API_KEY,
-    temperature=0
-)
+# Ensure environment variable is set for LangChain
+os.environ["GOOGLE_API_KEY"] = settings.GEMINI_API_KEY
+
+# Primary Chat LLM (Groq for speed and unlimited quotas)
+# Fallback to Gemini if Groq key is missing
+if settings.GROQ_API_KEY:
+    llm = ChatGroq(
+        model="llama-3.3-70b-versatile",
+        groq_api_key=settings.GROQ_API_KEY,
+        temperature=0
+    )
+    print("AI Agent: Using Groq Engine")
+else:
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.0-flash",
+        google_api_key=settings.GEMINI_API_KEY,
+        temperature=0
+    )
+    print("AI Agent: Using Gemini Engine (Groq Key missing)")
 
 # Bind tools for reasoning turns
 llm_with_tools = llm.bind_tools(tools)
@@ -203,8 +217,13 @@ class ExtractionState(TypedDict):
     report_url: str
     extracted_data: Union[ExtractionResponse, None]
 
-# Structured output for extraction
-extraction_llm = llm.with_structured_output(ExtractionResponse)
+# Separate LLM for Extraction (Always Gemini for Vision capability)
+vision_llm = ChatGoogleGenerativeAI(
+    model="gemini-2.0-flash",
+    google_api_key=settings.GEMINI_API_KEY,
+    temperature=0
+)
+extraction_llm = vision_llm.with_structured_output(ExtractionResponse)
 
 async def extraction_node(state: ExtractionState):
     """Node that extracts meds from a document URL using Gemini Vision."""
@@ -221,8 +240,8 @@ async def extraction_node(state: ExtractionState):
         {"type": "image_url", "image_url": {"url": state['report_url']}}
     ])
     
-    # First, we just do the pure extraction turn
-    response = await llm.ainvoke([message])
+    # Use vision_llm for the extraction turn
+    response = await vision_llm.ainvoke([message])
     return {"messages": [response]}
 
 async def verify_extraction_node(state: ExtractionState):

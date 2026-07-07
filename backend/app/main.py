@@ -21,6 +21,12 @@ async def lifespan(app: FastAPI):
     # Startup
     print("Starting MedRem Backend...")
     await connect_to_database()
+    
+    # Start the automated reminder scheduler
+    import asyncio
+    from app.services.scheduler_service import start_reminder_scheduler
+    asyncio.create_task(start_reminder_scheduler())
+    
     print("MedRem Backend is ready!")
     yield
     # Shutdown

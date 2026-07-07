@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +31,11 @@ fun MedicationsScreen(
     val filtered = viewModel.filteredMedications
     val activeCount = filtered.count { it.isActive }
 
+    // Refresh list every time screen is entered
+    LaunchedEffect(Unit) {
+        viewModel.loadMedications()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -49,55 +55,61 @@ fun MedicationsScreen(
             }
         }
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
-            // Search bar
-            OutlinedTextField(
-                value = uiState.searchQuery,
-                onValueChange = viewModel::onSearchChange,
-                placeholder = { Text("Search medications...") },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                singleLine = true,
-            )
+        PullToRefreshBox(
+            isRefreshing = uiState.isLoading,
+            onRefresh = { viewModel.loadMedications() },
+            modifier = Modifier.padding(padding)
+        ) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                // Search bar
+                OutlinedTextField(
+                    value = uiState.searchQuery,
+                    onValueChange = viewModel::onSearchChange,
+                    placeholder = { Text("Search medications...") },
+                    leadingIcon = { Icon(Icons.Default.Search, null) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    singleLine = true,
+                )
 
-            Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(20.dp))
 
-            // Header
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Your Cabinet", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                    Text("$activeCount Active", modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium)
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            if (uiState.isLoading) {
-                Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = PrimaryTeal)
-                }
-            } else if (filtered.isEmpty()) {
-                Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Outlined.MedicalServices, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(8.dp))
-                        Text("No medications yet", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Tap + to add your first medication", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // Header
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Your Cabinet", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                        Text("$activeCount Active", modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium)
                     }
                 }
-            } else {
-                filtered.forEach { med ->
-                    MedicationCard(
-                        medication = med,
-                        onEdit = { onNavigateToEditMedication(med.id) },
-                        onDelete = { viewModel.deleteMedication(med.id) },
-                    )
-                    Spacer(Modifier.height(12.dp))
-                }
-            }
 
-            Spacer(Modifier.height(80.dp))
+                Spacer(Modifier.height(16.dp))
+
+                if (uiState.isLoading && uiState.medications.isEmpty()) {
+                    Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = PrimaryTeal)
+                    }
+                } else if (!uiState.isLoading && filtered.isEmpty()) {
+                    Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Outlined.MedicalServices, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(8.dp))
+                            Text("No medications yet", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Tap + to add your first medication", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                } else {
+                    filtered.forEach { med ->
+                        MedicationCard(
+                            medication = med,
+                            onEdit = { onNavigateToEditMedication(med.id) },
+                            onDelete = { viewModel.deleteMedication(med.id) },
+                        )
+                        Spacer(Modifier.height(12.dp))
+                    }
+                }
+
+                Spacer(Modifier.height(80.dp))
+            }
         }
     }
 }

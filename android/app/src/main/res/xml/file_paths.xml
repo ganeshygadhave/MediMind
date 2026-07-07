@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Internal cache — used by our camera capture flow -->
+    <cache-path name="cache" path="." />
+    <!-- Internal files dir -->
+    <files-path name="files" path="." />
+    <!-- External files dir (needed on some devices) -->
+    <external-files-path name="external_files" path="." />
+    <!-- External cache dir -->
+    <external-cache-path name="external_cache" path="." />
+</paths>
+

@@ -25,4 +25,16 @@ interface MedicationApi {
 
     @DELETE("api/medications/{id}")
     suspend fun deleteMedication(@Path("id") id: String): Response<MessageResponseDto>
+
+    @POST("api/reminders/taken")
+    suspend fun markMedicationTaken(
+        @Header("Authorization") token: String,
+        @Body request: DoseLogRequestDto
+    ): Response<Map<String, Any>>
+
+    @POST("api/reminders/skipped")
+    suspend fun markMedicationSkipped(
+        @Header("Authorization") token: String,
+        @Body request: DoseLogRequestDto
+    ): Response<Map<String, Any>>
 }

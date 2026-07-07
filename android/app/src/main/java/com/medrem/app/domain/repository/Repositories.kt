@@ -6,7 +6,7 @@ import com.medrem.app.data.remote.dto.*
  * Auth repository interface.
  */
 interface AuthRepository {
-    suspend fun login(email: String, password: String): Result<AuthResponseDto>
+    suspend fun login(email: String, password: String, fcmToken: String? = null): Result<AuthResponseDto>
     suspend fun register(request: RegisterRequestDto): Result<AuthResponseDto>
     suspend fun getMe(): Result<UserDto>
     suspend fun logout()

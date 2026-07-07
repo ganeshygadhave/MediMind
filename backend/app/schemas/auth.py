@@ -29,6 +29,7 @@ class LoginRequest(BaseModel):
     """Login request with email and password."""
     email: EmailStr
     password: str
+    fcm_token: Optional[str] = None
 
 
 # ── Response Schemas ─────────────────────────────────────

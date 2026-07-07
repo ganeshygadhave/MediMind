@@ -60,7 +60,7 @@ async def register_user(
     }
 
 
-async def login_user(email: str, password: str) -> dict:
+async def login_user(email: str, password: str, fcm_token: str = None) -> dict:
     """
     Authenticate a user with email and password.
 
@@ -82,8 +82,13 @@ async def login_user(email: str, password: str) -> dict:
             detail="Invalid email or password."
         )
 
-    # Generate JWT token
+    # Update FCM token if provided
     user_id = str(user["_id"])
+    if fcm_token:
+        await user_repository.update_user(user_id, {"fcm_token": fcm_token})
+        user["fcm_token"] = fcm_token
+
+    # Generate JWT token
     token = create_access_token(data={"sub": user_id})
 
     # Return user data (excluding password)

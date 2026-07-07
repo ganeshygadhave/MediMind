@@ -36,6 +36,7 @@ class TokenManager @Inject constructor(
 
     companion object {
         private const val KEY_TOKEN = "jwt_token"
+        private const val KEY_FCM_TOKEN = "fcm_token"
         private const val KEY_USER_ID = "user_id"
         private const val KEY_USER_NAME = "user_name"
         private const val KEY_USER_EMAIL = "user_email"
@@ -47,6 +48,14 @@ class TokenManager @Inject constructor(
 
     fun getTokenSync(): String? {
         return prefs.getString(KEY_TOKEN, null)
+    }
+
+    fun saveFCMToken(token: String) {
+        prefs.edit().putString(KEY_FCM_TOKEN, token).apply()
+    }
+
+    fun getFCMToken(): String? {
+        return prefs.getString(KEY_FCM_TOKEN, null)
     }
 
     fun saveUserInfo(userId: String, userName: String, userEmail: String) {

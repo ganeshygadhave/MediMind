@@ -82,3 +82,36 @@ async def delete_medication(medication_id: str, user_id: str) -> bool:
             detail="Medication not found."
         )
     return True
+
+
+async def trigger_test_reminder(medication_id: str, user_id: str, current_user: dict) -> dict:
+    """Send a manual push notification reminder for a specific medication."""
+    from app.services import fcm_service
+
+    # 1. Get medication details
+    medication = await get_medication(medication_id, user_id)
+    
+    # 2. Get user's FCM token
+    fcm_token = current_user.get("fcm_token")
+    if not fcm_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your account does not have an FCM token. Please log in again to register your device."
+        )
+
+    # 3. Send reminder
+    success = await fcm_service.send_medication_reminder(
+        fcm_token=fcm_token,
+        medication_name=medication["name"],
+        dosage=medication["dosage"],
+        scheduled_time="Test Time",
+        medication_id=medication_id
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER__ERROR,
+            detail="Failed to send push notification. Check server logs for details."
+        )
+
+    return {"message": f"Remminder sent for {medication['name']}"}

@@ -27,9 +27,15 @@ import com.medrem.app.ui.theme.*
 @Composable
 fun DashboardScreen(
     onNavigateToAiAssistant: () -> Unit,
+    onNavigateToMedications: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val uiState = viewModel.uiState
+
+    // Refresh every time screen is visited
+    LaunchedEffect(Unit) {
+        viewModel.loadDashboard()
+    }
 
     Scaffold(
         topBar = {
@@ -105,9 +111,8 @@ fun DashboardScreen(
                 // Upcoming Medications
                 if (progress != null && progress.doses.isNotEmpty()) {
                     val upcomingCount = progress.doses.count { it.status == "upcoming" }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text("Upcoming Medications", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        TextButton(onClick = {}) { Text("View All", color = PrimaryTeal) }
                     }
                     progress.doses.filter { it.status == "upcoming" }.take(3).forEach { dose ->
                         UpcomingMedicationChip(name = dose.name, time = dose.time, dosage = dose.dosage)
@@ -121,7 +126,7 @@ fun DashboardScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Health Insight Card
-                HealthInsightCard()
+                HealthInsightCard(message = uiState.healthInsight)
 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -252,7 +257,7 @@ fun UpcomingMedicationChip(name: String, time: String, dosage: String) {
 }
 
 @Composable
-fun HealthInsightCard() {
+fun HealthInsightCard(message: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -270,7 +275,7 @@ fun HealthInsightCard() {
                 Text("Health Insight", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Based on your adherence this week, your consistency is stable. Maintaining this schedule helps your overall well-being. Keep it up!",
+                    message,
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White.copy(alpha = 0.9f),
                 )

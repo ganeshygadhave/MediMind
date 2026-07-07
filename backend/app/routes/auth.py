@@ -41,6 +41,7 @@ async def login(request: LoginRequest):
     result = await auth_service.login_user(
         email=request.email,
         password=request.password,
+        fcm_token=request.fcm_token,
     )
     return result
 

@@ -61,7 +61,11 @@ fun ReportDetailScreen(
                         }
                         Spacer(Modifier.height(12.dp))
                         if (report.aiSummary != null) {
-                            Text(report.aiSummary, style = MaterialTheme.typography.bodyMedium)
+                            dev.jeziellago.compose.markdowntext.MarkdownText(
+                                markdown = report.aiSummary,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                         } else {
                             Button(onClick = viewModel::summarize, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = PrimaryTeal), enabled = !uiState.isSummarizing) {
                                 if (uiState.isSummarizing) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -73,11 +77,6 @@ fun ReportDetailScreen(
 
                 Spacer(Modifier.height(16.dp))
 
-                // Extract Medicines Button
-                Button(onClick = viewModel::extractMedicines, Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = PrimaryTeal), enabled = !uiState.isExtracting) {
-                    if (uiState.isExtracting) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    else { Icon(Icons.Default.MedicalServices, null, Modifier.size(16.dp)); Spacer(Modifier.width(8.dp)); Text("Extract Medicines from Report") }
-                }
             }
         }
     }

@@ -71,3 +71,10 @@ async def delete_all_user_medications(user_id: str) -> int:
     collection = get_medications_collection()
     result = await collection.delete_many({"user_id": user_id})
     return result.deleted_count
+
+
+async def find_all_medications() -> list[dict]:
+    """Get all medications across the database for the scheduler."""
+    collection = get_medications_collection()
+    cursor = collection.find({"is_active": True})
+    return await cursor.to_list(length=1000)

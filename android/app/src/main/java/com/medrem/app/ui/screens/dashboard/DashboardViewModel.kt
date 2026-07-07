@@ -17,6 +17,7 @@ data class DashboardUiState(
     val stats: DashboardStatsDto? = null,
     val todayProgress: TodayProgressDto? = null,
     val recentReports: List<RecentReportDto> = emptyList(),
+    val healthInsight: String = "Monitoring your health data...",
     val isLoading: Boolean = true,
     val error: String? = null,
 )
@@ -46,12 +47,25 @@ class DashboardViewModel @Inject constructor(
             val consistencyResult = dashboardRepository.getConsistency()
             val reportsResult = dashboardRepository.getRecentReports()
 
+            val stats = statsResult.getOrNull()
+            val insight = generatePositiveInsight(stats?.consistencyScore ?: 0.0)
+
             uiState = uiState.copy(
                 isLoading = false,
-                stats = statsResult.getOrNull(),
+                stats = stats,
                 todayProgress = consistencyResult.getOrNull(),
                 recentReports = reportsResult.getOrDefault(emptyList()),
+                healthInsight = insight
             )
+        }
+    }
+
+    private fun generatePositiveInsight(score: Double): String {
+        return when {
+            score >= 90 -> "Incredible job! Your consistency is perfect. Keeping this rhythm is the best way to maintain your long-term health. Keep it up!"
+            score >= 70 -> "Doing great! You're staying on track with almost all your doses. Every pill taken is a solid step towards better recovery."
+            score >= 40 -> "Good progress! You're building a healthy habit. Even small steps count—let's try to hit a new personal best today!"
+            else -> "You're starting a journey! Every medication logged is a win for your future self. We're here to help you get back on track—you've got this!"
         }
     }
 }

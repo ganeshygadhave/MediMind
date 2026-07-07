@@ -10,6 +10,9 @@ import com.medrem.app.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.google.firebase.messaging.FirebaseMessaging
+import com.medrem.app.data.local.TokenManager
+import kotlinx.coroutines.tasks.await
 
 data class RegisterUiState(
     // Step 1: Account Info
@@ -34,6 +37,7 @@ data class RegisterUiState(
 @HiltViewModel
 class RegisterViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    private val tokenManager: TokenManager,
 ) : ViewModel() {
 
     var uiState by mutableStateOf(RegisterUiState())
@@ -58,8 +62,12 @@ class RegisterViewModel @Inject constructor(
     fun nextStep() {
         if (uiState.currentStep == 1) {
             // Validate Step 1
-            if (uiState.fullName.isBlank() || uiState.email.isBlank() || uiState.password.isBlank()) {
-                uiState = uiState.copy(error = "Please fill in all required fields.")
+            if (uiState.fullName.isBlank() || uiState.email.isBlank() || uiState.password.isBlank() || uiState.phone.isBlank()) {
+                uiState = uiState.copy(error = "Please fill in all required fields including mobile number.")
+                return
+            }
+            if (uiState.phone.length < 10) {
+                uiState = uiState.copy(error = "Please enter a valid 10-digit mobile number.")
                 return
             }
             if (uiState.password != uiState.confirmPassword) {
@@ -95,6 +103,15 @@ class RegisterViewModel @Inject constructor(
         viewModelScope.launch {
             uiState = uiState.copy(isLoading = true, error = null)
 
+            // Capture FCM token
+            var fcmToken: String? = null
+            try {
+                fcmToken = FirebaseMessaging.getInstance().token.await()
+                fcmToken?.let { tokenManager.saveFCMToken(it) }
+            } catch (e: Exception) {
+                // If FCM fails, register still proceeds
+            }
+
             val allergiesList = uiState.allergies
                 .split(",")
                 .map { it.trim() }
@@ -110,12 +127,13 @@ class RegisterViewModel @Inject constructor(
                 email = uiState.email.trim(),
                 password = uiState.password,
                 fullName = uiState.fullName.trim(),
-                phone = uiState.phone.ifBlank { null },
+                phone = uiState.phone.trim(),
                 dateOfBirth = formattedDate,
                 gender = uiState.gender,
                 bloodType = uiState.bloodType,
                 allergies = allergiesList.ifEmpty { null },
                 medicalConditions = conditionsList.ifEmpty { null },
+                fcmToken = fcmToken
             )
 
             val result = authRepository.register(request)
