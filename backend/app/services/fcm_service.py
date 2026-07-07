@@ -13,23 +13,35 @@ _firebase_initialized = False
 
 
 def _init_firebase():
-    """Initialize Firebase Admin SDK."""
+    """Initialize Firebase Admin SDK from env var JSON or file path."""
     global _firebase_initialized
     if _firebase_initialized:
         return
 
     try:
+        import json
         import firebase_admin
         from firebase_admin import credentials
 
+        # Priority 1: Load from FIREBASE_CREDENTIALS_JSON env var (for cloud deploy on Render)
+        cred_json_str = os.environ.get("FIREBASE_CREDENTIALS_JSON", "")
+        if cred_json_str:
+            cred_dict = json.loads(cred_json_str)
+            cred = credentials.Certificate(cred_dict)
+            firebase_admin.initialize_app(cred)
+            _firebase_initialized = True
+            print("Firebase Admin SDK initialized from environment variable.")
+            return
+
+        # Priority 2: Load from file path (for local development)
         cred_path = settings.FIREBASE_CREDENTIALS_PATH
         if os.path.exists(cred_path):
             cred = credentials.Certificate(cred_path)
             firebase_admin.initialize_app(cred)
             _firebase_initialized = True
-            print("Firebase Admin SDK initialized.")
+            print("Firebase Admin SDK initialized from file.")
         else:
-            print(f"Firebase credentials not found at {cred_path}. Push notifications disabled.")
+            print(f"Firebase credentials not found (checked env var + path '{cred_path}'). Push notifications disabled.")
     except Exception as e:
         print(f"Firebase initialization failed: {e}. Push notifications disabled.")
 

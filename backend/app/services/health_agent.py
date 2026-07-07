@@ -114,31 +114,36 @@ tool_node = ToolNode(tools)
 # Ensure environment variable is set for LangChain
 os.environ["GOOGLE_API_KEY"] = settings.GEMINI_API_KEY
 
-# Primary Chat LLM (Groq for speed and unlimited quotas)
-# Fallback to Gemini if Groq key is missing
-if settings.GROQ_API_KEY:
-    llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
-        groq_api_key=settings.GROQ_API_KEY,
-        temperature=0
-    )
-    print("AI Agent: Using Groq Engine")
-else:
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
-        google_api_key=settings.GEMINI_API_KEY,
-        temperature=0
-    )
-    print("AI Agent: Using Gemini Engine (Groq Key missing)")
+# Lazy-init: LLM clients are created on first use to save memory at startup
+_llm = None
+_llm_with_tools = None
+_structured_llm = None
 
-# Bind tools for reasoning turns
-llm_with_tools = llm.bind_tools(tools)
-
-# Bind structured output for the final result
-structured_llm = llm.with_structured_output(HealthResponse)
+def _get_llm():
+    """Lazy-initialize the primary LLM."""
+    global _llm, _llm_with_tools, _structured_llm
+    if _llm is None:
+        if settings.GROQ_API_KEY:
+            _llm = ChatGroq(
+                model="llama-3.3-70b-versatile",
+                groq_api_key=settings.GROQ_API_KEY,
+                temperature=0
+            )
+            print("AI Agent: Using Groq Engine")
+        else:
+            _llm = ChatGoogleGenerativeAI(
+                model="gemini-2.0-flash",
+                google_api_key=settings.GEMINI_API_KEY,
+                temperature=0
+            )
+            print("AI Agent: Using Gemini Engine (Groq Key missing)")
+        _llm_with_tools = _llm.bind_tools(tools)
+        _structured_llm = _llm.with_structured_output(HealthResponse)
+    return _llm, _llm_with_tools, _structured_llm
 
 async def call_model(state: AgentState):
     """Node to let the LLM decide its next tool call or finish reasoning."""
+    _, llm_with_tools, _ = _get_llm()
     system_prompt = (
         "You are the MedRem Health Assistant. YOUR KNOWLEDGE IS LIMITED TO THE TOOLS PROVIDED. "
         "1. ONLY answer based on data retrieved from 'get_user_profile', 'get_active_medications', or 'get_recent_medical_reports'. "
@@ -153,6 +158,7 @@ async def call_model(state: AgentState):
 
 async def finalize_response(state: AgentState):
     """Node that forces the LLM to follow the structured HealthResponse schema."""
+    _, _, structured_llm = _get_llm()
     prompt = (
         "Based on the conversation and tools results found above, provide a FINAL structured response. "
         "If you detect a drug interaction, set warning_level to 'high'."
@@ -168,20 +174,25 @@ def should_continue(state: AgentState):
         return "tools"
     return "finalize"
 
-# ── 5. Build the Graph ─────────────────────────────────────
+# ── 5. Build the Graph (Lazy) ──────────────────────────────
+# Compiled graphs are cached after first call to avoid startup memory cost.
 
-workflow = StateGraph(AgentState)
+_app = None
 
-workflow.add_node("agent", call_model)
-workflow.add_node("tools", tool_node)
-workflow.add_node("finalize", finalize_response)
-
-workflow.set_entry_point("agent")
-workflow.add_conditional_edges("agent", should_continue, {"tools": "tools", "finalize": "finalize"})
-workflow.add_edge("tools", "agent")
-workflow.add_edge("finalize", END)
-
-app = workflow.compile()
+def _get_app():
+    """Lazy-compile the health agent graph."""
+    global _app
+    if _app is None:
+        workflow = StateGraph(AgentState)
+        workflow.add_node("agent", call_model)
+        workflow.add_node("tools", tool_node)
+        workflow.add_node("finalize", finalize_response)
+        workflow.set_entry_point("agent")
+        workflow.add_conditional_edges("agent", should_continue, {"tools": "tools", "finalize": "finalize"})
+        workflow.add_edge("tools", "agent")
+        workflow.add_edge("finalize", END)
+        _app = workflow.compile()
+    return _app
 
 # ── 6. Entry Point ─────────────────────────────────────────
 
@@ -193,7 +204,7 @@ async def run_health_agent(user_id: str, message: str) -> dict:
         "final_output": None
     }
     
-    result = await app.ainvoke(initial_state)
+    result = await _get_app().ainvoke(initial_state)
     output = result["final_output"]
     
     # Return as dict for consistency with existing service
@@ -217,16 +228,25 @@ class ExtractionState(TypedDict):
     report_url: str
     extracted_data: Union[ExtractionResponse, None]
 
-# Separate LLM for Extraction (Always Gemini for Vision capability)
-vision_llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash",
-    google_api_key=settings.GEMINI_API_KEY,
-    temperature=0
-)
-extraction_llm = vision_llm.with_structured_output(ExtractionResponse)
+# Lazy-init: vision LLM created on first extraction call
+_vision_llm = None
+_extraction_llm = None
+
+def _get_vision_llm():
+    """Lazy-initialize the Gemini vision LLM."""
+    global _vision_llm, _extraction_llm
+    if _vision_llm is None:
+        _vision_llm = ChatGoogleGenerativeAI(
+            model="gemini-2.0-flash",
+            google_api_key=settings.GEMINI_API_KEY,
+            temperature=0
+        )
+        _extraction_llm = _vision_llm.with_structured_output(ExtractionResponse)
+    return _vision_llm, _extraction_llm
 
 async def extraction_node(state: ExtractionState):
     """Node that extracts meds from a document URL using Gemini Vision."""
+    vision_llm, _ = _get_vision_llm()
     prompt = (
         "STRICT GROUNDING RULE: You are a medical transcriber. "
         "ONLY extract what is EXPLICITLY visible in the provided document image. "
@@ -240,23 +260,13 @@ async def extraction_node(state: ExtractionState):
         {"type": "image_url", "image_url": {"url": state['report_url']}}
     ])
     
-    # Use vision_llm for the extraction turn
     response = await vision_llm.ainvoke([message])
     return {"messages": [response]}
 
 async def verify_extraction_node(state: ExtractionState):
     """Node that cross-references extracted meds with user's existing history."""
-    # We use the reasoning LLM (with tools) to gather patient context
-    context_llm = llm.bind_tools(tools)
+    _, extraction_llm = _get_vision_llm()
     
-    verification_prompt = (
-        "An extraction agent found these medications in a report: " + state["messages"][-1].content + "\n"
-        "Now, use your tools to check the patient's current medications and allergies. "
-        "Then, provide the final structured ExtractionResponse including 'is_duplicate' and 'interaction_warning' flags."
-    )
-    
-    # This is a bit recursive, but we'll use a simpler approach:
-    # 1. Fetch data manually in the node
     med_context = await get_active_medications.ainvoke(state["user_id"])
     profile_context = await get_user_profile.ainvoke(state["user_id"])
     
@@ -269,14 +279,20 @@ async def verify_extraction_node(state: ExtractionState):
     response = await extraction_llm.ainvoke(final_prompt)
     return {"extracted_data": response}
 
-extract_workflow = StateGraph(ExtractionState)
-extract_workflow.add_node("extract", extraction_node)
-extract_workflow.add_node("verify", verify_extraction_node)
-extract_workflow.set_entry_point("extract")
-extract_workflow.add_edge("extract", "verify")
-extract_workflow.add_edge("verify", END)
+_extract_app = None
 
-extract_app = extract_workflow.compile()
+def _get_extract_app():
+    """Lazy-compile the extraction agent graph."""
+    global _extract_app
+    if _extract_app is None:
+        extract_workflow = StateGraph(ExtractionState)
+        extract_workflow.add_node("extract", extraction_node)
+        extract_workflow.add_node("verify", verify_extraction_node)
+        extract_workflow.set_entry_point("extract")
+        extract_workflow.add_edge("extract", "verify")
+        extract_workflow.add_edge("verify", END)
+        _extract_app = extract_workflow.compile()
+    return _extract_app
 
 async def run_extraction_agent(user_id: str, report_url: str) -> dict:
     """Entry point for the extraction agent."""
@@ -287,7 +303,7 @@ async def run_extraction_agent(user_id: str, report_url: str) -> dict:
         "extracted_data": None
     }
     
-    result = await extract_app.ainvoke(initial_state)
+    result = await _get_extract_app().ainvoke(initial_state)
     output = result["extracted_data"]
     
     if isinstance(output, ExtractionResponse):
