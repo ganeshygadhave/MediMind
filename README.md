@@ -1,6 +1,25 @@
 # 🏥 MediMind: AI-Powered Medication & Health Companion
 
+<p align="center">
+  <a href="https://github.com/ganeshygadhave/MediMind/releases/download/v1.0.0/app-debug.apk">
+    <img src="https://img.shields.io/badge/Download%20APK-v1.0.0-brightgreen?style=for-the-badge&logo=android" alt="Download APK">
+  </a>
+  <img src="https://img.shields.io/badge/Platform-Android-blue?style=for-the-badge&logo=android" alt="Platform">
+  <img src="https://img.shields.io/badge/AI-LangGraph%20%2B%20Groq-orange?style=for-the-badge&logo=openai" alt="AI">
+  <img src="https://img.shields.io/badge/Backend-FastAPI-teal?style=for-the-badge&logo=fastapi" alt="Backend">
+</p>
+
 MediMind is an advanced health-tech application designed to simplify medication adherence through cutting-edge AI integration. Far more than a traditional reminder app, MediMind serves as a proactive health companion, utilizing Large Language Models (LLMs) and computer vision to manage complex medication schedules and provide context-aware health guidance.
+
+---
+
+## 📲 Download & Install
+
+> **Requires Android 8.0+ (API 26)**
+
+1. **[⬇️ Download app-debug.apk](https://github.com/ganeshygadhave/MediMind/releases/download/v1.0.0/app-debug.apk)** from GitHub Releases
+2. On your Android device, go to **Settings → Security → Install Unknown Apps** and allow your browser/file manager
+3. Open the downloaded APK and tap **Install**
 
 ---
 
