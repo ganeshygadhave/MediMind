@@ -3,6 +3,7 @@ MedRem Backend — FCM Service
 Firebase Cloud Messaging for push notifications.
 """
 
+import asyncio
 import os
 from typing import Optional
 
@@ -44,6 +45,12 @@ def _init_firebase():
             print(f"Firebase credentials not found (checked env var + path '{cred_path}'). Push notifications disabled.")
     except Exception as e:
         print(f"Firebase initialization failed: {e}. Push notifications disabled.")
+
+
+def _send_sync(message) -> str:
+    """Synchronous Firebase send — runs in a thread pool to avoid blocking."""
+    from firebase_admin import messaging
+    return messaging.send(message)
 
 
 async def send_notification(
@@ -90,7 +97,8 @@ async def send_notification(
             ),
         )
 
-        response = messaging.send(message)
+        # Run the synchronous Firebase SDK call in a thread to avoid blocking the async event loop
+        response = await asyncio.to_thread(_send_sync, message)
         print(f"Notification sent: {response}")
         return True
 
@@ -118,7 +126,7 @@ async def send_medication_reminder(
     """
     return await send_notification(
         fcm_token=fcm_token,
-        title=f"💊 Time for {medication_name}",
+        title=f"Time for {medication_name}",
         body=f"Take {dosage} — Scheduled for {scheduled_time}",
         data={
             "type": "medication_reminder",

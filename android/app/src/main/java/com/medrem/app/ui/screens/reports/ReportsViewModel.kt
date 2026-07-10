@@ -57,16 +57,28 @@ class ReportsViewModel @Inject constructor(private val reportRepository: ReportR
         viewModelScope.launch {
             uiState = uiState.copy(isUploading = true, error = null)
             
-            // For now, we take the first image or you could loop to merge them
-            // In a real pro app, we'd use a PDF library here
+            // For now, we take the first image
             val uri = uiState.pendingImages.first()
             val path = com.medrem.app.util.FileUtils.getFilePathFromUri(context, uri)
             
             if (path != null) {
-                reportRepository.upload(path, "Multi-page Report", "medical_record").fold(
-                    onSuccess = { 
-                        uiState = uiState.copy(pendingImages = emptyList(), isUploading = false)
-                        loadReports() 
+                val titleResult = reportRepository.getNextTitle("report")
+                val title = titleResult.getOrDefault("Report")
+
+                reportRepository.upload(path, title, "medical_record").fold(
+                    onSuccess = { report ->
+                        // Automatically generate and save the summary
+                        reportRepository.summarize(report.id).fold(
+                            onSuccess = {
+                                uiState = uiState.copy(pendingImages = emptyList(), isUploading = false)
+                                loadReports()
+                            },
+                            onFailure = {
+                                // Even if summarization fails, complete the upload
+                                uiState = uiState.copy(pendingImages = emptyList(), isUploading = false)
+                                loadReports()
+                            }
+                        )
                     },
                     onFailure = { uiState = uiState.copy(error = it.message, isUploading = false) }
                 )
@@ -82,6 +94,15 @@ class ReportsViewModel @Inject constructor(private val reportRepository: ReportR
             reportRepository.upload(filePath, title, "other").fold(
                 onSuccess = { loadReports() },
                 onFailure = { uiState = uiState.copy(error = it.message, isLoading = false) }
+            )
+        }
+    }
+
+    fun renameReport(id: String, newTitle: String) {
+        viewModelScope.launch {
+            reportRepository.rename(id, newTitle).fold(
+                onSuccess = { loadReports() },
+                onFailure = { uiState = uiState.copy(error = it.message) }
             )
         }
     }

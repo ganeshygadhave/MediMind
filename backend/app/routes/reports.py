@@ -4,11 +4,14 @@ POST   /api/reports/upload
 GET    /api/reports
 GET    /api/reports/{id}
 DELETE /api/reports/{id}
+PATCH  /api/reports/{id}/rename
+POST   /api/reports/next-title
 """
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
 from app.schemas.auth import MessageResponse
+from app.schemas.report import RenameReportRequest, AutoTitleRequest, AutoTitleResponse
 from app.services import report_service
 from app.middleware.auth_middleware import get_current_user
 
@@ -61,3 +64,25 @@ async def delete_report(
     user_id = str(current_user["_id"])
     await report_service.delete_report(report_id, user_id)
     return {"message": "Report deleted successfully."}
+
+
+@router.patch("/{report_id}/rename")
+async def rename_report(
+    report_id: str,
+    request: RenameReportRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Rename a report's title."""
+    user_id = str(current_user["_id"])
+    return await report_service.rename_report(report_id, user_id, request.title)
+
+
+@router.post("/next-title", response_model=AutoTitleResponse)
+async def get_next_title(
+    request: AutoTitleRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Get the next auto-generated title for the given upload source."""
+    user_id = str(current_user["_id"])
+    title = await report_service.generate_auto_title(user_id, request.source)
+    return {"title": title}

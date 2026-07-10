@@ -21,7 +21,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Backend URL (change for production)
-        buildConfigField("String", "BASE_URL", "\"http://172.31.161.192:8000\"")
+        buildConfigField("String", "BASE_URL", "\"https://medimind-7w55.onrender.com\"")
     }
 
     buildTypes {

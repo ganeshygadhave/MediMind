@@ -64,6 +64,17 @@ OUTPUT RULES:
 3. Return ONLY the JSON array. No conversational text.
 4. If a value is unknown, use "Not specified"."""
 
+MEDICAL_HISTORY_PROMPT = """You are a medical records assistant. The user has provided their medical history as free text.
+
+Summarize the medical history in a SHORT, structured format:
+1. **Conditions**: List each medical condition mentioned
+2. **Surgeries/Procedures**: Any past surgeries
+3. **Key Notes**: Any other relevant medical facts
+
+Keep it concise (max 3-4 sentences). Use simple language.
+Do NOT diagnose or add conditions not mentioned by the user.
+Return ONLY the summary text, no extra commentary."""
+
 
 
 async def _build_user_context(user: dict, user_id: str) -> str:
@@ -292,3 +303,23 @@ async def extract_medicines(report_url: str, user_id: str) -> list[dict]:
     except Exception as e:
         print(f"DEBUG: Extraction Error: {str(e)}")
         return []
+
+
+async def summarize_medical_history(text: str) -> str:
+    """
+    Summarize free-text medical history input using Groq.
+    Returns a concise AI-generated summary string.
+    """
+    try:
+        if not text or len(text.strip()) < 5:
+            return "No medical history provided."
+
+        if settings.GROQ_API_KEY:
+            groq_llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=settings.GROQ_API_KEY)
+            prompt = f"{MEDICAL_HISTORY_PROMPT}\n\nUser's Medical History:\n{text}"
+            response = await groq_llm.ainvoke([HumanMessage(content=prompt)])
+            return response.content
+        return "AI key is not configured."
+    except Exception as e:
+        print(f"DEBUG: Medical History Summarization Error: {str(e)}")
+        return f"Summarization failed: {str(e)}"

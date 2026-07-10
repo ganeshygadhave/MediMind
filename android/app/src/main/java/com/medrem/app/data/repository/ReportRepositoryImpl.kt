@@ -71,4 +71,28 @@ class ReportRepositoryImpl @Inject constructor(
             else Result.failure(Exception("Failed to extract medicines"))
         } catch (e: Exception) { Result.failure(e) }
     }
+
+    override suspend fun rename(id: String, newTitle: String): Result<ReportDto> {
+        return try {
+            val response = reportApi.renameReport(id, RenameReportRequestDto(newTitle))
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception("Failed to rename report"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    override suspend fun getNextTitle(source: String): Result<String> {
+        return try {
+            val response = reportApi.getNextTitle(AutoTitleRequestDto(source))
+            if (response.isSuccessful) Result.success(response.body()!!.title)
+            else Result.failure(Exception("Failed to get next title"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    override suspend fun summarizeMedicalHistory(text: String): Result<MedicalHistorySummarizeResponseDto> {
+        return try {
+            val response = aiApi.summarizeMedicalHistory(MedicalHistorySummarizeRequestDto(text))
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception("Failed to summarize medical history"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
 }

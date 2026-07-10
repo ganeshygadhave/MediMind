@@ -150,7 +150,11 @@ class AddMedicationViewModel @Inject constructor(
         viewModelScope.launch {
             isLoading = true
             error = null
-            reportRepository.upload(filePath, "Extracted Prescription", "prescription").fold(
+            
+            val titleResult = reportRepository.getNextTitle("prescription")
+            val title = titleResult.getOrDefault("Prescription")
+
+            reportRepository.upload(filePath, title, "prescription").fold(
                 onSuccess = { report ->
                     reportRepository.extractMedicines(report.id).fold(
                         onSuccess = { extractRes ->

@@ -3,12 +3,13 @@ MedRem Backend — AI Routes
 POST /api/ai/chat
 POST /api/ai/summarize-report
 POST /api/ai/extract-medicines
+POST /api/ai/summarize-medical-history
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.schemas.chat import ChatRequest
-from app.schemas.report import ReportSummaryRequest, ExtractMedicinesRequest
+from app.schemas.report import ReportSummaryRequest, ExtractMedicinesRequest, MedicalHistorySummarizeRequest
 from app.services import ai_service, report_service
 from app.repositories import report_repository
 from app.middleware.auth_middleware import get_current_user
@@ -88,4 +89,35 @@ async def extract_medicines(
     return {
         "report_id": request.report_id,
         "medicines": medicines,
+    }
+
+
+@router.post("/summarize-medical-history")
+async def summarize_medical_history(
+    request: MedicalHistorySummarizeRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Summarize free-text medical history input using AI.
+    Returns a concise summary and saves it to the user's profile context.
+    """
+    user_id = str(current_user["_id"])
+
+    summary = await ai_service.summarize_medical_history(request.text)
+
+    # Save the summary as a medical condition in the user's profile
+    from app.repositories import user_repository
+    user = await user_repository.find_user_by_id(user_id)
+    conditions = user.get("medical_conditions", []) if user else []
+
+    # Add the AI-summarized medical history as a new condition entry
+    conditions.append({
+        "name": "Medical History (AI Summary)",
+        "description": summary
+    })
+    await user_repository.update_user(user_id, {"medical_conditions": conditions})
+
+    return {
+        "summary": summary,
+        "saved": True,
     }

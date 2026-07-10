@@ -69,3 +69,16 @@ async def delete_all_user_reports(user_id: str) -> int:
     collection = get_reports_collection()
     result = await collection.delete_many({"user_id": user_id})
     return result.deleted_count
+
+
+async def count_by_prefix(user_id: str, prefix: str) -> int:
+    """Count reports for a user whose title starts with the given prefix."""
+    import re
+    collection = get_reports_collection()
+    pattern = re.compile(f"^{re.escape(prefix)}", re.IGNORECASE)
+    return await collection.count_documents({"user_id": user_id, "title": pattern})
+
+
+async def rename_report(report_id: str, user_id: str, new_title: str) -> bool:
+    """Rename a report's title."""
+    return await update_report(report_id, user_id, {"title": new_title.strip()})

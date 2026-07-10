@@ -16,4 +16,7 @@ interface AiApi {
 
     @POST("api/ai/extract-medicines")
     suspend fun extractMedicines(@Body request: ReportActionDto): Response<ExtractMedicinesResponseDto>
+
+    @POST("api/ai/summarize-medical-history")
+    suspend fun summarizeMedicalHistory(@Body request: MedicalHistorySummarizeRequestDto): Response<MedicalHistorySummarizeResponseDto>
 }

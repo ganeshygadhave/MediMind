@@ -195,3 +195,26 @@ data class DoseLogResponseDto(
     val action: String,
     val timestamp: String,
 )
+
+// New DTOs for Rename, Next Title, and Medical History Summary
+data class RenameReportRequestDto(
+    val title: String
+)
+
+data class AutoTitleRequestDto(
+    val source: String
+)
+
+data class AutoTitleResponseDto(
+    val title: String
+)
+
+data class MedicalHistorySummarizeRequestDto(
+    val text: String
+)
+
+data class MedicalHistorySummarizeResponseDto(
+    val summary: String,
+    val saved: Boolean
+)
+

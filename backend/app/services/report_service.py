@@ -1,6 +1,6 @@
 """
 MedRem Backend — Report Service
-Business logic for report upload, retrieval, and deletion.
+Business logic for report upload, retrieval, deletion, rename, and auto-naming.
 """
 
 from fastapi import HTTPException, UploadFile, status
@@ -9,6 +9,21 @@ from app.models.report import create_report_document
 from app.repositories import report_repository
 from app.services import cloudinary_service
 from app.utils.helpers import serialize_doc
+
+
+async def generate_auto_title(user_id: str, source: str) -> str:
+    """
+    Generate an auto-incrementing title based on upload source.
+    source: 'prescription' | 'report' | 'chatbot'
+    """
+    prefix_map = {
+        "prescription": "Prescription",
+        "report": "Report",
+        "chatbot": "Chatbot File",
+    }
+    prefix = prefix_map.get(source, "Report")
+    count = await report_repository.count_by_prefix(user_id, prefix)
+    return f"{prefix} {count + 1}"
 
 
 async def upload_report(
@@ -83,3 +98,30 @@ async def delete_report(report_id: str, user_id: str) -> bool:
     # Delete from MongoDB
     await report_repository.delete_report(report_id, user_id)
     return True
+
+
+async def rename_report(report_id: str, user_id: str, new_title: str) -> dict:
+    """
+    Rename a report's title.
+
+    Raises:
+        HTTPException 404: If report not found
+        HTTPException 400: If title is empty
+    """
+    if not new_title or not new_title.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Title cannot be empty."
+        )
+
+    report = await report_repository.find_report_by_id(report_id, user_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found."
+        )
+
+    await report_repository.rename_report(report_id, user_id, new_title)
+    # Fetch updated
+    updated = await report_repository.find_report_by_id(report_id, user_id)
+    return serialize_doc(updated)

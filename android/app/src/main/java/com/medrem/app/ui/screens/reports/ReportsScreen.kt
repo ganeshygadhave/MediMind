@@ -44,6 +44,8 @@ fun ReportsScreen(
 
     var tempImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var showPermissionDeniedMsg by remember { mutableStateOf(false) }
+    var reportToRename by remember { mutableStateOf<ReportDto?>(null) }
+    var renameText by remember { mutableStateOf("") }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
@@ -165,17 +167,65 @@ fun ReportsScreen(
                 }
             } else {
                 uiState.reports.forEach { report ->
-                    ReportCard(report = report, onClick = { onNavigateToReportDetail(report.id) }, onDelete = { viewModel.deleteReport(report.id) })
+                    ReportCard(
+                        report = report,
+                        onClick = { onNavigateToReportDetail(report.id) },
+                        onDelete = { viewModel.deleteReport(report.id) },
+                        onRename = {
+                            reportToRename = report
+                            renameText = report.title
+                        }
+                    )
                     Spacer(Modifier.height(12.dp))
                 }
             }
+
+            if (reportToRename != null) {
+                AlertDialog(
+                    onDismissRequest = { reportToRename = null },
+                    title = { Text("Rename Report") },
+                    text = {
+                        OutlinedTextField(
+                            value = renameText,
+                            onValueChange = { renameText = it },
+                            label = { Text("Report Title") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                if (renameText.isNotBlank()) {
+                                    viewModel.renameReport(reportToRename!!.id, renameText)
+                                }
+                                reportToRename = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryTeal)
+                        ) {
+                            Text("Save")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { reportToRename = null }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
             Spacer(Modifier.height(80.dp))
         }
     }
 }
 
 @Composable
-fun ReportCard(report: ReportDto, onClick: () -> Unit, onDelete: () -> Unit) {
+fun ReportCard(
+    report: ReportDto,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+    onRename: () -> Unit
+) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -196,6 +246,7 @@ fun ReportCard(report: ReportDto, onClick: () -> Unit, onDelete: () -> Unit) {
                     }
                 }
             }
+            IconButton(onClick = onRename) { Icon(Icons.Outlined.Edit, "Rename", tint = PrimaryTeal) }
             IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, "Delete", tint = MaterialTheme.colorScheme.error) }
         }
     }

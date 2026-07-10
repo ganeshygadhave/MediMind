@@ -35,22 +35,11 @@ fun ProfileScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showEditDialog by remember { mutableStateOf(false) }
     var showAllergyDialog by remember { mutableStateOf(false) }
+    var historyInput by remember { mutableStateOf("") }
     
-    // File Picker for Medical Records
-    val recordLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let {
-            val path = FileUtils.getFilePathFromUri(context, it)
-            if (path != null) {
-                viewModel.uploadMedicalRecord(path)
-            }
-        }
-    }
-
-    LaunchedEffect(uiState.uploadSuccess) {
-        if (uiState.uploadSuccess) {
-            snackbarHostState.showSnackbar("Medical record uploaded successfully!")
+    LaunchedEffect(uiState.historySaved) {
+        if (uiState.historySaved) {
+            snackbarHostState.showSnackbar("Medical history summarized and saved!")
         }
     }
 
@@ -75,13 +64,13 @@ fun ProfileScreen(
                 }
             }
         ) { padding ->
-            if (uiState.isLoading || uiState.isUploading) {
+            if (uiState.isLoading || uiState.isSavingHistory) {
                 Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { 
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(color = PrimaryTeal)
-                        if (uiState.isUploading) {
+                        if (uiState.isSavingHistory) {
                             Spacer(Modifier.height(8.dp))
-                            Text("Uploading record...")
+                            Text("Summarizing medical history...")
                         }
                     }
                 }
@@ -194,16 +183,29 @@ fun ProfileScreen(
                             }
                         }
                         
-                        Spacer(Modifier.height(16.dp))
-                        OutlinedButton(
-                            onClick = { recordLauncher.launch("*/*") },
+                        OutlinedTextField(
+                            value = historyInput,
+                            onValueChange = { historyInput = it },
+                            label = { Text("Describe your medical/surgical history") },
+                            modifier = Modifier.fillMaxWidth().height(120.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            placeholder = { Text("e.g. Diagnosed with hypertension in 2021. Had appendix removed in 2023.") }
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                if (historyInput.isNotBlank()) {
+                                    viewModel.saveMedicalHistory(historyInput)
+                                    historyInput = ""
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, PrimaryTeal)
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryTeal)
                         ) {
-                            Icon(Icons.Default.CloudUpload, null, Modifier.size(18.dp), tint = PrimaryTeal)
+                            Icon(Icons.Default.AutoAwesome, null, Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Upload Medical Record", color = PrimaryTeal)
+                            Text("AI Summarize & Save")
                         }
                     }
                 }

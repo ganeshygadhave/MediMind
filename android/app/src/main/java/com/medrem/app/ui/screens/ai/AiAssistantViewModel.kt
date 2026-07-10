@@ -61,7 +61,9 @@ class AiAssistantViewModel @Inject constructor(
             try {
                 var finalPrompt = text
                 if (file != null) {
-                    val uploadRes = reportRepository.upload(file.path, file.name, "medical_report")
+                    val titleResult = reportRepository.getNextTitle("chatbot")
+                    val title = titleResult.getOrDefault("Chatbot File")
+                    val uploadRes = reportRepository.upload(file.path, title, "medical_report")
                     uploadRes.fold(
                         onSuccess = { report ->
                             finalPrompt = "[Report Attached: ${report.title}]\n$text"

@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8000
-    DEBUG: bool = True
+    DEBUG: bool = False
 
     class Config:
         env_file = str(BASE_DIR / ".env")

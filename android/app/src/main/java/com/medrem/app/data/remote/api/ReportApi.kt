@@ -26,4 +26,15 @@ interface ReportApi {
 
     @DELETE("api/reports/{id}")
     suspend fun deleteReport(@Path("id") id: String): Response<MessageResponseDto>
+
+    @PATCH("api/reports/{id}/rename")
+    suspend fun renameReport(
+        @Path("id") id: String,
+        @Body request: RenameReportRequestDto
+    ): Response<ReportDto>
+
+    @POST("api/reports/next-title")
+    suspend fun getNextTitle(
+        @Body request: AutoTitleRequestDto
+    ): Response<AutoTitleResponseDto>
 }

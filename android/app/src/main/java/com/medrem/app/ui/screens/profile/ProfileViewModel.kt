@@ -16,8 +16,8 @@ data class ProfileUiState(
     val user: UserDto? = null, 
     val isLoading: Boolean = true, 
     val error: String? = null,
-    val isUploading: Boolean = false,
-    val uploadSuccess: Boolean = false
+    val isSavingHistory: Boolean = false,
+    val historySaved: Boolean = false
 )
 
 @HiltViewModel
@@ -40,16 +40,16 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    fun uploadMedicalRecord(filePath: String) {
+    fun saveMedicalHistory(text: String) {
         viewModelScope.launch {
-            uiState = uiState.copy(isUploading = true, error = null, uploadSuccess = false)
-            reportRepository.upload(filePath, "Medical History Record", "medical_record").fold(
+            uiState = uiState.copy(isSavingHistory = true, error = null, historySaved = false)
+            reportRepository.summarizeMedicalHistory(text).fold(
                 onSuccess = {
-                    uiState = uiState.copy(isUploading = false, uploadSuccess = true)
-                    // Refresh profile/history if needed, though for now it mostly goes to reports
+                    uiState = uiState.copy(isSavingHistory = false, historySaved = true)
+                    loadProfile() // Reload profile to reflect new summary in list
                 },
                 onFailure = {
-                    uiState = uiState.copy(isUploading = false, error = "Upload failed: ${it.message}")
+                    uiState = uiState.copy(isSavingHistory = false, error = "Failed to save history: ${it.message}")
                 }
             )
         }

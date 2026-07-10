@@ -28,3 +28,23 @@ class ReportSummaryRequest(BaseModel):
 class ExtractMedicinesRequest(BaseModel):
     """Request medicine extraction from prescription image."""
     report_id: str
+
+
+class RenameReportRequest(BaseModel):
+    """Request to rename a report."""
+    title: str
+
+
+class AutoTitleRequest(BaseModel):
+    """Request the next auto-generated title for a given source."""
+    source: str  # 'prescription' | 'report' | 'chatbot'
+
+
+class AutoTitleResponse(BaseModel):
+    """Response with the next auto-generated title."""
+    title: str
+
+
+class MedicalHistorySummarizeRequest(BaseModel):
+    """Request AI summarization of free-text medical history."""
+    text: str

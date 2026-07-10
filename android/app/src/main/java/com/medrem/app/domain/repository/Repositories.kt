@@ -33,6 +33,9 @@ interface ReportRepository {
     suspend fun delete(id: String): Result<MessageResponseDto>
     suspend fun summarize(reportId: String): Result<ReportSummaryResponseDto>
     suspend fun extractMedicines(reportId: String): Result<ExtractMedicinesResponseDto>
+    suspend fun rename(id: String, newTitle: String): Result<ReportDto>
+    suspend fun getNextTitle(source: String): Result<String>
+    suspend fun summarizeMedicalHistory(text: String): Result<MedicalHistorySummarizeResponseDto>
 }
 
 /**
