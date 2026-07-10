@@ -6,12 +6,14 @@ Gemini 2.5 Flash integration for chat, report summarization, and medicine extrac
 import json
 import os
 from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
 from fastapi import HTTPException, status
 
 from app.config import settings
 from app.models.chat import create_chat_message_document
 from app.repositories import chat_repository, medication_repository, report_repository
+from app.services.health_agent import ExtractionResponse
 from app.utils.helpers import serialize_doc
 
 # ── System Prompt ────────────────────────────────────────
@@ -66,14 +68,61 @@ OUTPUT RULES:
 
 MEDICAL_HISTORY_PROMPT = """You are a medical records assistant. The user has provided their medical history as free text.
 
-Summarize the medical history in a SHORT, structured format:
-1. **Conditions**: List each medical condition mentioned
-2. **Surgeries/Procedures**: Any past surgeries
-3. **Key Notes**: Any other relevant medical facts
+Summarize the medical history in a SHORT, readable format with exactly these lines:
+Conditions: ...
+Procedures: ...
+Key notes: ...
 
-Keep it concise (max 3-4 sentences). Use simple language.
+Keep it very short, simple, and readable.
 Do NOT diagnose or add conditions not mentioned by the user.
 Return ONLY the summary text, no extra commentary."""
+
+
+def _build_text_model():
+    if settings.GEMINI_API_KEY:
+        return ChatGoogleGenerativeAI(
+            model="gemini-2.0-flash",
+            google_api_key=settings.GEMINI_API_KEY,
+            temperature=0,
+        )
+    if settings.GROQ_API_KEY:
+        return ChatGroq(
+            model="llama-3.3-70b-versatile",
+            groq_api_key=settings.GROQ_API_KEY,
+            temperature=0,
+        )
+    return None
+
+
+def _build_vision_model():
+    if settings.GEMINI_API_KEY:
+        return ChatGoogleGenerativeAI(
+            model="gemini-2.0-flash",
+            google_api_key=settings.GEMINI_API_KEY,
+            temperature=0,
+        )
+    if settings.GROQ_API_KEY:
+        return ChatGroq(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            groq_api_key=settings.GROQ_API_KEY,
+            temperature=0,
+        )
+    return None
+
+
+def _extract_json_array(content: str) -> list[dict]:
+    try:
+        if not content:
+            return []
+        start = content.find("[")
+        end = content.rfind("]")
+        if start == -1 or end == -1 or end <= start:
+            return []
+        payload = content[start:end + 1]
+        parsed = json.loads(payload)
+        return parsed if isinstance(parsed, list) else []
+    except Exception:
+        return []
 
 
 
@@ -209,6 +258,9 @@ async def summarize_report(report_url: str, user_id: str) -> str:
             file_bytes = resp.content
             content_type = resp.headers.get("Content-Type", "")
 
+        text_model = _build_text_model()
+        vision_model = _build_vision_model()
+
         # 2. Case A: It's a PDF -> Extract text and summarize
         if "pdf" in content_type.lower() or report_url.lower().endswith(".pdf"):
             pdf_file = io.BytesIO(file_bytes)
@@ -216,29 +268,34 @@ async def summarize_report(report_url: str, user_id: str) -> str:
             extracted_text = ""
             for page in reader.pages:
                 extracted_text += page.extract_text() + "\n"
-            
-            if len(extracted_text.strip()) < 10:
-                return "The PDF seems to be an image/scan. Please upload a JPEG or PNG of the report instead."
 
-            if settings.GROQ_API_KEY:
-                groq_llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=settings.GROQ_API_KEY)
+            extracted_text = extracted_text.strip()
+            if extracted_text and text_model:
                 prompt = f"{REPORT_SUMMARY_PROMPT}\n\nPDF TEXT:\n{extracted_text}"
-                response = await groq_llm.ainvoke([HumanMessage(content=prompt)])
+                response = await text_model.ainvoke([HumanMessage(content=prompt)])
                 return response.content
-            return "Groq key missing."
+
+            if vision_model:
+                message = HumanMessage(content=[
+                    {"type": "text", "text": f"{REPORT_SUMMARY_PROMPT}\nThis is a PDF report. Summarize what you can see from the linked document."},
+                    {"type": "image_url", "image_url": {"url": report_url}}
+                ])
+                response = await vision_model.ainvoke([message])
+                return response.content
+
+            return "AI summarization is not available right now."
 
         # 3. Case B: It's an Image -> Use Vision
-        if settings.GROQ_API_KEY:
+        if vision_model:
             image_b64 = base64.b64encode(file_bytes).decode("utf-8")
-            groq_llm = ChatGroq(model="meta-llama/llama-4-scout-17b-16e-instruct", groq_api_key=settings.GROQ_API_KEY)
             message = HumanMessage(content=[
                 {"type": "text", "text": f"{REPORT_SUMMARY_PROMPT}\nAnalyze this report."},
                 {"type": "image_url", "image_url": {"url": f"data:{content_type};base64,{image_b64}"}}
             ])
-            response = await groq_llm.ainvoke([message])
+            response = await vision_model.ainvoke([message])
             return response.content
         
-        return "Groq API Key is missing."
+        return "AI summarization is not available right now."
 
     except Exception as e:
         print(f"DEBUG: Summarization Error: {str(e)}")
@@ -257,7 +314,10 @@ async def extract_medicines(report_url: str, user_id: str) -> list[dict]:
         import io
         from pypdf import PdfReader
 
-        if settings.GROQ_API_KEY:
+        text_model = _build_text_model()
+        vision_model = _build_vision_model()
+
+        if text_model or vision_model:
             # 1. Download file
             async with httpx.AsyncClient() as client:
                 resp = await client.get(report_url)
@@ -273,29 +333,34 @@ async def extract_medicines(report_url: str, user_id: str) -> list[dict]:
                 extracted_text = ""
                 for page in reader.pages:
                     extracted_text += page.extract_text() + "\n"
-                
-                groq_llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=settings.GROQ_API_KEY)
-                prompt = f"{MEDICINE_EXTRACTION_PROMPT}\n\nPDF TEXT CONTENT:\n{extracted_text}"
-                response = await groq_llm.ainvoke([HumanMessage(content=prompt)])
+
+                if extracted_text.strip() and text_model:
+                    prompt = f"{MEDICINE_EXTRACTION_PROMPT}\n\nPDF TEXT CONTENT:\n{extracted_text}"
+                    response = await text_model.ainvoke([HumanMessage(content=prompt)])
+                elif vision_model:
+                    message = HumanMessage(content=[
+                        {"type": "text", "text": f"{MEDICINE_EXTRACTION_PROMPT}\nExtract medicines from this PDF and return JSON only."},
+                        {"type": "image_url", "image_url": {"url": report_url}}
+                    ])
+                    response = await vision_model.ainvoke([message])
+                else:
+                    return []
             
             # 3. Case B: Image Extraction
             else:
                 image_b64 = base64.b64encode(file_bytes).decode("utf-8")
-                groq_llm = ChatGroq(model="meta-llama/llama-4-scout-17b-16e-instruct", groq_api_key=settings.GROQ_API_KEY)
                 message = HumanMessage(content=[
                     {"type": "text", "text": f"{MEDICINE_EXTRACTION_PROMPT}\nExtract medications from this document."},
                     {"type": "image_url", "image_url": {"url": f"data:{content_type};base64,{image_b64}"}}
                 ])
-                response = await groq_llm.ainvoke([message])
+                response = await vision_model.ainvoke([message]) if vision_model else None
+                if response is None:
+                    return []
 
             # Parse the JSON from Groq's response
             try:
-                content = response.content
-                if "[" in content and "]" in content:
-                    json_str = content[content.find("["):content.rfind("]")+1]
-                    return json.loads(json_str)
-                return []
-            except:
+                return _extract_json_array(response.content)
+            except Exception:
                 return []
         
         return []
@@ -314,10 +379,10 @@ async def summarize_medical_history(text: str) -> str:
         if not text or len(text.strip()) < 5:
             return "No medical history provided."
 
-        if settings.GROQ_API_KEY:
-            groq_llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=settings.GROQ_API_KEY)
+        model = _build_text_model()
+        if model:
             prompt = f"{MEDICAL_HISTORY_PROMPT}\n\nUser's Medical History:\n{text}"
-            response = await groq_llm.ainvoke([HumanMessage(content=prompt)])
+            response = await model.ainvoke([HumanMessage(content=prompt)])
             return response.content
         return "AI key is not configured."
     except Exception as e:

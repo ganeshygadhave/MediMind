@@ -56,35 +56,35 @@ class ReportsViewModel @Inject constructor(private val reportRepository: ReportR
         
         viewModelScope.launch {
             uiState = uiState.copy(isUploading = true, error = null)
-            
-            // For now, we take the first image
-            val uri = uiState.pendingImages.first()
-            val path = com.medrem.app.util.FileUtils.getFilePathFromUri(context, uri)
-            
-            if (path != null) {
+            var failed = false
+
+            uiState.pendingImages.forEach { uri ->
+                val path = com.medrem.app.util.FileUtils.getFilePathFromUri(context, uri)
+                if (path == null) {
+                    failed = true
+                    return@forEach
+                }
+
                 val titleResult = reportRepository.getNextTitle("report")
                 val title = titleResult.getOrDefault("Report")
 
                 reportRepository.upload(path, title, "medical_record").fold(
                     onSuccess = { report ->
-                        // Automatically generate and save the summary
-                        reportRepository.summarize(report.id).fold(
-                            onSuccess = {
-                                uiState = uiState.copy(pendingImages = emptyList(), isUploading = false)
-                                loadReports()
-                            },
-                            onFailure = {
-                                // Even if summarization fails, complete the upload
-                                uiState = uiState.copy(pendingImages = emptyList(), isUploading = false)
-                                loadReports()
-                            }
-                        )
+                        reportRepository.summarize(report.id)
                     },
-                    onFailure = { uiState = uiState.copy(error = it.message, isUploading = false) }
+                    onFailure = {
+                        failed = true
+                        Result.failure(it)
+                    }
                 )
-            } else {
-                uiState = uiState.copy(error = "Could not process image", isUploading = false)
             }
+
+            uiState = uiState.copy(
+                pendingImages = emptyList(),
+                isUploading = false,
+                error = if (failed) "Some files could not be uploaded or summarized." else null
+            )
+            loadReports()
         }
     }
 
@@ -92,7 +92,10 @@ class ReportsViewModel @Inject constructor(private val reportRepository: ReportR
         viewModelScope.launch {
             uiState = uiState.copy(isLoading = true, error = null)
             reportRepository.upload(filePath, title, "other").fold(
-                onSuccess = { loadReports() },
+                onSuccess = { report ->
+                    reportRepository.summarize(report.id)
+                    loadReports()
+                },
                 onFailure = { uiState = uiState.copy(error = it.message, isLoading = false) }
             )
         }

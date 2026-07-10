@@ -9,6 +9,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
+import java.net.URLConnection
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -37,7 +38,16 @@ class ReportRepositoryImpl @Inject constructor(
     override suspend fun upload(filePath: String, title: String, reportType: String): Result<ReportDto> {
         return try {
             val file = File(filePath)
-            val requestBody = file.asRequestBody("image/*".toMediaTypeOrNull())
+            val mimeType = when (file.extension.lowercase()) {
+                "jpg", "jpeg" -> "image/jpeg"
+                "png" -> "image/png"
+                "webp" -> "image/webp"
+                "pdf" -> "application/pdf"
+                "doc" -> "application/msword"
+                "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                else -> URLConnection.guessContentTypeFromName(file.name) ?: "application/octet-stream"
+            }
+            val requestBody = file.asRequestBody(mimeType.toMediaTypeOrNull())
             val filePart = MultipartBody.Part.createFormData("file", file.name, requestBody)
             val titlePart = title.toRequestBody("text/plain".toMediaTypeOrNull())
             val typePart = reportType.toRequestBody("text/plain".toMediaTypeOrNull())

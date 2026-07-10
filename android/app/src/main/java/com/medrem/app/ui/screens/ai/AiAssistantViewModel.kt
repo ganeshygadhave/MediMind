@@ -66,7 +66,25 @@ class AiAssistantViewModel @Inject constructor(
                     val uploadRes = reportRepository.upload(file.path, title, "medical_report")
                     uploadRes.fold(
                         onSuccess = { report ->
-                            finalPrompt = "[Report Attached: ${report.title}]\n$text"
+                            reportRepository.summarize(report.id).fold(
+                                onSuccess = { summary ->
+                                    finalPrompt = buildString {
+                                        appendLine("[Attached file: ${report.title}]")
+                                        appendLine("[File summary: ${summary.summary}]")
+                                        if (text.isNotBlank()) {
+                                            appendLine(text)
+                                        } else {
+                                            appendLine("Use the uploaded file context to answer.")
+                                        }
+                                    }
+                                },
+                                onFailure = {
+                                    finalPrompt = buildString {
+                                        appendLine("[Attached file: ${report.title}]")
+                                        appendLine(text)
+                                    }
+                                }
+                            )
                         },
                         onFailure = { 
                             // If upload fails, we still try to send the message but maybe notify
