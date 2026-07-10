@@ -95,4 +95,8 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideDashboardApi(retrofit: Retrofit): DashboardApi = retrofit.create(DashboardApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideUserApi(retrofit: Retrofit): UserApi = retrofit.create(UserApi::class.java)
 }

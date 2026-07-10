@@ -71,10 +71,11 @@ class ReportsViewModel @Inject constructor(private val reportRepository: ReportR
                 reportRepository.upload(path, title, "medical_record").fold(
                     onSuccess = { report ->
                         reportRepository.summarize(report.id)
+                        Unit
                     },
                     onFailure = {
                         failed = true
-                        Result.failure(it)
+                        Unit
                     }
                 )
             }

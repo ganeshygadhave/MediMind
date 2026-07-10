@@ -218,3 +218,7 @@ data class MedicalHistorySummarizeResponseDto(
     val saved: Boolean
 )
 
+data class UserProfileUpdateDto(
+    @SerializedName("fcm_token") val fcmToken: String? = null,
+)
+
