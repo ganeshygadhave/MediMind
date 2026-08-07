@@ -78,17 +78,25 @@ async def extract_medicines(
     # Get the report
     report = await report_service.get_report(request.report_id, user_id)
 
-    # Extract medicines
-    medicines = await ai_service.extract_medicines(report["file_url"], user_id)
+    # Extract medicines (returns a dict containing 'medicines' and 'summary')
+    extraction_result = await ai_service.extract_medicines(report["file_url"], user_id)
+    medicines = extraction_result.get("medicines", [])
+    summary = extraction_result.get("summary", "")
 
     # Update report with extracted data
     await report_repository.update_report(
-        request.report_id, user_id, {"extracted_data": {"medicines": medicines}}
+        request.report_id, user_id, {
+            "extracted_data": {
+                "medicines": medicines,
+                "summary": summary
+            }
+        }
     )
 
     return {
         "report_id": request.report_id,
         "medicines": medicines,
+        "summary": summary
     }
 
 

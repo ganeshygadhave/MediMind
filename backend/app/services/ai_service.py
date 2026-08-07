@@ -304,70 +304,17 @@ async def summarize_report(report_url: str, user_id: str) -> str:
         return f"Summarization failed: {str(e)}"
 
 
-async def extract_medicines(report_url: str, user_id: str) -> list[dict]:
+async def extract_medicines(report_url: str, user_id: str) -> dict:
     """
-    Extract medicine information from a prescription image or PDF using Groq.
+    Extract medicine information from a prescription image or PDF using Agentic LangGraph.
     """
     try:
-        import httpx
-        import base64
-        import io
-        from pypdf import PdfReader
-
-        text_model = _build_text_model()
-        vision_model = _build_vision_model()
-
-        if text_model or vision_model:
-            # 1. Download file
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(report_url)
-                if resp.status_code != 200:
-                    return []
-                file_bytes = resp.content
-                content_type = resp.headers.get("Content-Type", "")
-
-            # 2. Case A: PDF Extraction
-            if "pdf" in content_type.lower() or report_url.lower().endswith(".pdf"):
-                pdf_file = io.BytesIO(file_bytes)
-                reader = PdfReader(pdf_file)
-                extracted_text = ""
-                for page in reader.pages:
-                    extracted_text += page.extract_text() + "\n"
-
-                if extracted_text.strip() and text_model:
-                    prompt = f"{MEDICINE_EXTRACTION_PROMPT}\n\nPDF TEXT CONTENT:\n{extracted_text}"
-                    response = await text_model.ainvoke([HumanMessage(content=prompt)])
-                elif vision_model:
-                    message = HumanMessage(content=[
-                        {"type": "text", "text": f"{MEDICINE_EXTRACTION_PROMPT}\nExtract medicines from this PDF and return JSON only."},
-                        {"type": "image_url", "image_url": {"url": report_url}}
-                    ])
-                    response = await vision_model.ainvoke([message])
-                else:
-                    return []
-            
-            # 3. Case B: Image Extraction
-            else:
-                image_b64 = base64.b64encode(file_bytes).decode("utf-8")
-                message = HumanMessage(content=[
-                    {"type": "text", "text": f"{MEDICINE_EXTRACTION_PROMPT}\nExtract medications from this document."},
-                    {"type": "image_url", "image_url": {"url": f"data:{content_type};base64,{image_b64}"}}
-                ])
-                response = await vision_model.ainvoke([message]) if vision_model else None
-                if response is None:
-                    return []
-
-            # Parse the JSON from Groq's response
-            try:
-                return _extract_json_array(response.content)
-            except Exception:
-                return []
-        
-        return []
-
+        from app.services.health_agent import run_extraction_agent
+        result = await run_extraction_agent(user_id=user_id, report_url=report_url)
+        return result
     except Exception as e:
         print(f"DEBUG: Extraction Error: {str(e)}")
-        return []
+        return {"medicines": [], "summary": f"Extraction failed: {str(e)}"}
 
 
 async def summarize_medical_history(text: str) -> str:

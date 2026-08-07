@@ -209,7 +209,7 @@ async def run_health_agent(user_id: str, message: str) -> dict:
     
     # Return as dict for consistency with existing service
     if isinstance(output, HealthResponse):
-        return output.dict()
+        return output.model_dump()
     
     return {
         "answer": "Error in generating response.",
@@ -245,23 +245,57 @@ def _get_vision_llm():
     return _vision_llm, _extraction_llm
 
 async def extraction_node(state: ExtractionState):
-    """Node that extracts meds from a document URL using Gemini Vision."""
+    """Node that extracts meds from a document URL using Gemini (text or Vision)."""
     vision_llm, _ = _get_vision_llm()
     prompt = (
         "STRICT GROUNDING RULE: You are a medical transcriber. "
-        "ONLY extract what is EXPLICITLY visible in the provided document image. "
-        "DO NOT guess medications. DO NOT infer information not present in the image. "
-        "If the image is blurry or unclear, set the 'instructions' field to 'IMAGE UNCLEAR'."
+        "ONLY extract what is EXPLICITLY visible in the provided document or image. "
+        "DO NOT guess medications. DO NOT infer information not present. "
+        "If the document is blurry or unclear, set the 'instructions' field to 'IMAGE UNCLEAR'."
     )
     
-    # We include the URL in the message for Gemini to fetch/see
-    message = HumanMessage(content=[
-        {"type": "text", "text": f"{prompt}\nDocument URL: {state['report_url']}"},
-        {"type": "image_url", "image_url": {"url": state['report_url']}}
-    ])
+    report_url = state['report_url']
     
-    response = await vision_llm.ainvoke([message])
-    return {"messages": [response]}
+    import httpx
+    import base64
+    import io
+    from pypdf import PdfReader
+
+    try:
+        # Download file
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(report_url, follow_redirects=True)
+            if resp.status_code != 200:
+                raise Exception(f"Failed to download report document. Status code: {resp.status_code}")
+            file_bytes = resp.content
+            content_type = resp.headers.get("Content-Type", "")
+
+        # Check if PDF
+        if "pdf" in content_type.lower() or report_url.lower().endswith(".pdf"):
+            pdf_file = io.BytesIO(file_bytes)
+            reader = PdfReader(pdf_file)
+            extracted_text = ""
+            for page in reader.pages:
+                extracted_text += page.extract_text() + "\n"
+            
+            final_prompt = f"{prompt}\n\nPDF TEXT:\n{extracted_text.strip()}"
+            message = HumanMessage(content=final_prompt)
+        else:
+            # Handle as image
+            image_b64 = base64.b64encode(file_bytes).decode("utf-8")
+            image_uri = f"data:{content_type};base64,{image_b64}"
+            message = HumanMessage(content=[
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image_uri}}
+            ])
+            
+        response = await vision_llm.ainvoke([message])
+        return {"messages": [response]}
+    except Exception as e:
+        print(f"Extraction Node error: {e}")
+        import langchain_core.messages
+        error_msg = langchain_core.messages.AIMessage(content=f"Error reading document: {str(e)}")
+        return {"messages": [error_msg]}
 
 async def verify_extraction_node(state: ExtractionState):
     """Node that cross-references extracted meds with user's existing history."""
@@ -307,6 +341,6 @@ async def run_extraction_agent(user_id: str, report_url: str) -> dict:
     output = result["extracted_data"]
     
     if isinstance(output, ExtractionResponse):
-        return output.dict()
+        return output.model_dump()
     
     return {"medicines": [], "summary": "Failed to extract data."}
