@@ -30,10 +30,14 @@ At the heart of MediMind is a sophisticated AI agent built on **LangGraph**.
 - **Context-Aware**: The agent doesn't just answer questions; it queries the user's real-time medication logs and medical history to provide safe, personalized advice.
 - **Structured Logic**: It uses agentic workflows to determine when to look up reports, when to cross-reference allergies, and when to provide interactive health tips.
 
-### 📷 Smart prescription Extraction (Google Gemini AI)
-MediMind eliminates manual data entry errors through AI-driven OCR.
-- **One-Tap Scanning**: Users can photograph physical prescriptions or medical reports.
-- **Automatic Intake**: Using Gemini 1.5 Pro, the app parses drug names, dosages, and frequencies, instantly populating the user's schedule with high accuracy.
+### 📷 Agentic Prescription Extraction (Google Gemini 2.0 Flash)
+MediMind eliminates manual data entry errors through an autonomous LangGraph pipeline.
+- **Multi-Modal Document Parsing**: High-fidelity vision scanning of physical prescription images and PDF text processing utilizing `pypdf`.
+- **Automatic Validation**: Cross-references patient database profiles to evaluate and flag duplicate medications and drug-drug/drug-allergy interactions.
+
+### 🧪 Offline Test Automation (Pytest)
+- **Zero-Cost Verification**: A mock-based integration test suite validating multi-turn conversational health agent flows and decision node routers offline without calling live APIs.
+- **Continuous Integration Ready**: Graph validations and tool-binding assertions execute in ~2 seconds with clear testing reports.
 
 ### 🔔 Interactive Life-Cycle Notifications
 The application features a "Closed-Loop" feedback system.
